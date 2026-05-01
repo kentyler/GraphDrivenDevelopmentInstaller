@@ -47,7 +47,6 @@ The core operation: given two or more graph IDs, produce a projection of their i
 - **Shared nodes** — nodes that appear in memberships for multiple of the input graphs (boundary nodes). These are found by querying `gdd.graph_memberships` for nodes with memberships in more than one of the specified graphs.
 - **Cross-graph edges** — all edges that span graph boundaries (endpoints in different graphs' memberships)
 - **Test conflicts** — intents in different graphs whose test conditions contradict each other
-- **Throughput comparison** — total downstream throughput in each graph for contested intents
 - **Unresolved gaps** — gaps in either graph that affect the intersection
 - **Coverage gaps** — intents in one graph that depend on capabilities in the other graph where no intent exists
 
@@ -57,8 +56,8 @@ The merge projection does not modify either graph. It is read-only — a view of
 
 The merge projection can be rendered in both forms:
 
-- **Human-legible**: "Graph A needs the auth API (intent auth-api, throughput $300K) before it can proceed with payments. Graph B's auth API intent has a test condition requiring 100ms response time. Graph A's payments intent has a test condition requiring full schema validation on all inputs. These tension with each other."
-- **LLM-legible**: Structured JSON with full node data, cross-graph edges, test condition text, throughput values.
+- **Human-legible**: "Graph A needs the auth API (intent auth-api) before it can proceed with payments. Graph B's auth API intent has a test condition requiring 100ms response time. Graph A's payments intent has a test condition requiring full schema validation on all inputs. These tension with each other."
+- **LLM-legible**: Structured JSON with full node data, cross-graph edges, test condition text.
 
 The LLM's role is translation — making the intersection legible to both parties. It does not decide the merge.
 
@@ -72,7 +71,7 @@ The merge itself is a negotiation — a structured collaboration where the inten
 4. Parties negotiate:
    - **Resolved tensions** → one side adjusts their test condition, or a new shared intent is created
    - **New cross-graph edges** → dependencies are formalized
-   - **New shared intents** → work that both graphs need, created with agreed test conditions and throughput
+   - **New shared intents** → work that both graphs need, created with agreed test conditions
    - **Unresolvable conflicts** → gap nodes with notes, capturing each side's position
 5. Changes are recorded as graph elements in both graphs — intents created, edges added, expressions recorded. The graph topology IS the record of what changed.
 6. Negotiation closes with a diff showing the new graph elements in each graph
@@ -85,19 +84,17 @@ The graph makes negotiation concrete:
 
 **Test conflicts are the negotiation points.** Not "we disagree about the API" but "graph A's test says under 100ms, graph B's test says full validation." The conflict is specific and testable. Resolution means changing one or both test conditions, not reaching a vague agreement.
 
-**Throughput makes tradeoffs visible.** If graph A's contested intent unlocks $500K downstream and graph B's conflicting intent unlocks $200K, the negotiation has a number. Not competing opinions — competing numbers that flow through the same dependency edges.
-
 **Gaps are the honest output.** Where parties can't agree, the result is a gap node with notes capturing both positions. Not a fudged compromise. Not a decision deferred by silence. An explicit record that says "this is unresolved, here's what each side needs, here's what a resolution requires."
 
 **The critical path crosses graphs.** The longest chain of red intents may span multiple graphs. The merge projection shows this — the cross-graph critical path is where coordination matters most. Everything else can proceed independently.
 
 ## Organizational patterns
 
-**Department collaboration.** Engineering and product each have a graph. Product creates intents with throughput values (revenue expectations). Engineering creates intents with test conditions (technical specifications). The merge projection shows where product expectations and engineering constraints tension.
+**Department collaboration.** Engineering and product each have a graph. Product creates intents describing business outcomes. Engineering creates intents with test conditions (technical specifications). The merge projection shows where product expectations and engineering constraints tension.
 
 **Vendor integration.** Your graph has an intent that depends on a vendor's deliverable. The cross-graph edge formalizes this. The vendor's graph (or a proxy of it) shows their progress. The merge projection shows your risk exposure — how much of your critical path depends on their red intents.
 
-**M&A due diligence.** Two companies considering a merger project their intent graphs. The merge projection shows: overlapping capabilities (redundancy), complementary capabilities (synergy), conflicting test conditions (integration risk), and total throughput (combined value). Due diligence becomes a graph operation.
+**M&A due diligence.** Two companies considering a merger project their intent graphs. The merge projection shows: overlapping capabilities (redundancy), complementary capabilities (synergy), conflicting test conditions (integration risk). Due diligence becomes a graph operation.
 
 **Multi-team projects.** Multiple teams working on a shared initiative each maintain their graph. A periodic merge projection shows: cross-team dependencies, blocked teams waiting on other teams, and where the critical path crosses team boundaries. This is the standup meeting replaced by a projection.
 

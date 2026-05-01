@@ -90,7 +90,7 @@ Each entry below is a pair: an abstract intent node and its initial expression n
       "GDD_DB_PASSWORD": "(prompted or env)"
     },
     "client_library": "pg (node-postgres)",
-    "rationale": "PostgreSQL chosen for JSONB support (artifacts, primitive_dna, scope, trigger fields), mature reliability, broad availability, and zero additional infrastructure for single-node deployments."
+    "rationale": "PostgreSQL chosen for JSONB support (artifacts, scope, trigger fields), mature reliability, broad availability, and zero additional infrastructure for single-node deployments."
   }
 }
 ```
@@ -338,7 +338,7 @@ When a founding decision changes — substrate migration, runtime change, protoc
 
 The abstract intent (`persist-graph-state`) remains green throughout. Its test condition remains the same — the substrate must survive restarts, regardless of which substrate. The downstream intents (`foundation-tables`, etc.) that are `blocked-by` `persist-graph-state` are unaffected.
 
-If the abstract intent itself needs revision — if "persists graph state reliably" turns out to be the wrong framing — supersede the intent node the same way any intent is superseded: new intent node + `supersedes` edge. This is the tier-2 revaluation case from `revaluation.md`: a definitional change that should trigger impact detection across artifacts carrying the Trace primitive.
+If the abstract intent itself needs revision — if "persists graph state reliably" turns out to be the wrong framing — supersede the intent node the same way any intent is superseded: new intent node + `supersedes` edge.
 
 ---
 
@@ -348,4 +348,3 @@ If the abstract intent itself needs revision — if "persists graph state reliab
 - `intent-graph.md` — Prerequisites section (the prose this layer inscribes as graph nodes), Build Order
 - `intent-graph-layers.md` — Layer 0-7 definitions; add `system-origins` to `gdd-root`'s children array
 - `graph-completeness.md` — Write-only semantics, supersession pattern
-- `revaluation.md` — Tier-2 (definitional) impact detection, relevant when a founding decision is redefined

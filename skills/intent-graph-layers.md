@@ -27,10 +27,10 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "id": "table-nodes",
     "type": "define-table",
     "name": "Intent nodes table",
-    "description": "Stores all nodes in the global graph. The type column uses the full fixed vocabulary from gdd.node_type (20 values). Intent-category types (define-table, implement-operation, etc.) carry test conditions and can be red/green. compose, gap, decision, signal, and expression are their own categories with distinct behavior. No status column -- red/green is derived by checking for incoming satisfies edges. test_condition is nullable: required for intent-category types, null for gap, decision, signal, and expression, structural for compose. artifacts (JSONB, nullable) and primitive_dna (JSONB, nullable) are used only by expression nodes.",
+    "description": "Stores all nodes in the global graph. The type column uses the full fixed vocabulary from gdd.node_type (20 values). Intent-category types (define-table, implement-operation, etc.) carry test conditions and can be red/green. compose, gap, decision, signal, and expression are their own categories with distinct behavior. No status column -- red/green is derived by checking for incoming satisfies edges. test_condition is nullable: required for intent-category types, null for gap, decision, signal, and expression, structural for compose. artifacts (JSONB, nullable) is used only by expression nodes.",
     "table_name": "gdd.nodes",
     "test": {
-      "condition": "Table exists with columns: id, type (typed as gdd.node_type enum), name, description, test_condition (nullable), test_verification, throughput (numeric, nullable), notes (text, nullable), artifacts (JSONB, nullable), primitive_dna (JSONB, nullable). No status column. Red/green is derived by checking for incoming satisfies edges from expression nodes. Gap, decision, signal, and expression nodes have null test_condition. All other non-compose types require a non-null test_condition. Only expression nodes use the artifacts and primitive_dna columns.",
+      "condition": "Table exists with columns: id, type (typed as gdd.node_type enum), name, description, test_condition (nullable), test_verification, notes (text, nullable), artifacts (JSONB, nullable). No status column. Red/green is derived by checking for incoming satisfies edges from expression nodes. Gap, decision, signal, and expression nodes have null test_condition. All other non-compose types require a non-null test_condition. Only expression nodes use the artifacts column.",
       "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='nodes'"
     }
   },
@@ -232,14 +232,14 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-query-incomplete",
     "type": "implement-traversal",
     "name": "Query incomplete intents",
-    "description": "Return all intent nodes that are red (no incoming satisfies edge) and current (not superseded). Expression nodes, decision nodes, and signal nodes are excluded -- expression nodes are artifacts (neither red nor green), decision nodes are deliberation records, and signal nodes are raw events (already happened). Gap nodes ARE included -- they are detected blockers that need resolution. This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Compose nodes are green when all their contains children are green. Ordering: if any red intents have throughput values, order by total downstream throughput (the intent's own throughput plus the throughput of all intents it transitively unblocks). Null throughput is treated as zero. If no throughput values exist anywhere, fall back to ordering by downstream dependent count.",
+    "description": "Return all intent nodes that are red (no incoming satisfies edge) and current (not superseded). Expression nodes, decision nodes, and signal nodes are excluded -- expression nodes are artifacts (neither red nor green), decision nodes are deliberation records, and signal nodes are raw events (already happened). Gap nodes ARE included -- they are detected blockers that need resolution. This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Compose nodes are green when all their contains children are green. Ordered by downstream dependent count desc.",
     "traversal_name": "queryIncomplete",
     "start": "Global graph",
-    "pattern": "Filter for current nodes (no supersedes edge pointing at them) with no incoming satisfies edge (red). Exclude expression nodes, decision nodes, and signal nodes. Include gap nodes. Optional workable filter checks blocked-by edges. Order by total downstream throughput desc (with downstream dependent count as fallback)",
-    "returns": "Array of red intent nodes with their downstream dependent counts and total downstream throughput",
+    "pattern": "Filter for current nodes (no supersedes edge pointing at them) with no incoming satisfies edge (red). Exclude expression nodes, decision nodes, and signal nodes. Include gap nodes. Optional workable filter checks blocked-by edges. Order by downstream dependent count desc.",
+    "returns": "Array of red intent nodes with their downstream dependent counts",
     "blocked_by": ["op-create-intent", "op-create-edge"],
     "test": {
-      "condition": "Returns only red, current intents and gaps (no incoming satisfies edge, not superseded). Does not return green intents (have incoming satisfies edges). Does not return superseded intents. Does not return expression nodes, decision nodes, or signal nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. When throughput values exist: intent A (throughput 100, unblocks B with throughput 200) ranks above intent C (throughput 250, unblocks nothing) because A's total is 300.",
+      "condition": "Returns only red, current intents and gaps (no incoming satisfies edge, not superseded). Does not return green intents (have incoming satisfies edges). Does not return superseded intents. Does not return expression nodes, decision nodes, or signal nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. Ordered by downstream dependent count desc.",
       "verification": "Integration test: create intents with and without incoming satisfies edges, with and without satisfied dependencies, with and without supersession. Verify filtered and unfiltered queries. Test compose node green derivation. Verify expression nodes are excluded from results."
     }
   },
@@ -580,13 +580,13 @@ The system serves multiple actor types, but humans need surfaces -- places where
     "id": "ui-dashboard",
     "type": "implement-operation",
     "name": "Dashboard surface",
-    "description": "The primary entry point for human actors. Answers the question 'what's red?' by showing all active (red, current) intents, ordered by downstream impact (or throughput if values exist). Also surfaces gap count, recent graph activity (newly created nodes), and agent status summaries. This is the human-legible equivalent of queryIncomplete + queryAgents.",
+    "description": "The primary entry point for human actors. Answers the question 'what's red?' by showing all active (red, current) intents, ordered by downstream dependent count. Also surfaces gap count, recent graph activity (newly created nodes), and agent status summaries. This is the human-legible equivalent of queryIncomplete + queryAgents.",
     "operation_name": "dashboard",
     "input": "Optional filters: scope (subgraph), actor (whose work), time range",
     "output": "Rendered view of graph health: red intents ordered by impact, gap count, recent nodes, agent summaries",
     "blocked_by": ["op-query-incomplete", "op-render-human", "op-query-agents"],
     "test": {
-      "condition": "A human looking at the dashboard can answer: what needs work next, how many gaps need decisions, which agents are active, and what was created recently. Red intents appear ordered by downstream dependent count (or throughput). Satisfied intents do not appear unless explicitly requested. Superseded intents do not appear.",
+      "condition": "A human looking at the dashboard can answer: what needs work next, how many gaps need decisions, which agents are active, and what was created recently. Red intents appear ordered by downstream dependent count. Satisfied intents do not appear unless explicitly requested. Superseded intents do not appear.",
       "verification": "Create a graph with mix of red/green intents (some blocked, some workable), gaps, decisions, and superseded intents. Verify the dashboard surfaces the right information in the right order."
     }
   },
@@ -688,69 +688,6 @@ The MCP server makes the graph reachable from external tools. It runs inside the
 ]
 ```
 
-### Layer 7: Semantic Revaluation -- Impact Detection Through Primitive DNA
-
-When a new intent arrives, existing artifacts may be affected not through structural connection but through shared semantic composition. This layer adds the mechanism for detecting that impact. See `skills/revaluation.md` for the full account.
-
-```json
-[
-  {
-    "id": "revaluation",
-    "type": "compose",
-    "name": "Semantic revaluation mechanism",
-    "description": "Impact detection for existing artifacts when new intents arrive. Routes through primitive DNA composition rather than dependency edges. Includes DNA assignment on expressions, primitive signature analysis on intake, and impact detection queries.",
-    "children": ["op-assign-dna", "op-primitive-signature", "op-impact-detection", "ui-impact-surface"]
-  },
-  {
-    "id": "op-assign-dna",
-    "type": "implement-operation",
-    "name": "Assign primitive DNA to expressions",
-    "description": "When recordExpression creates an expression node, the LLM assesses the artifact's primitive composition and writes a weight vector to the primitive_dna field. The same LLM call that produces the expression description also produces the DNA. The vector has four keys: transduction, resolution, boundary, trace -- each a float between 0 and 1 representing relative weight. See foundations.md (Four primitives underlie all artifacts) for the primitive definitions.",
-    "operation_name": "assignPrimitiveDna",
-    "blocked_by": ["op-record-expression"],
-    "test": {
-      "condition": "When recordExpression is called, the resulting expression node has a non-null primitive_dna field containing a JSON object with keys transduction, resolution, boundary, trace, each a number between 0 and 1.",
-      "verification": "Call recordExpression for a test artifact, verify the expression node in gdd.nodes has a valid primitive_dna value."
-    }
-  },
-  {
-    "id": "op-primitive-signature",
-    "type": "implement-operation",
-    "name": "Extract primitive impact signature from new intents",
-    "description": "When clientSession, transduceExternal, or translateRepresentation processes a new intent, the LLM also produces a primitive impact signature -- which primitives the intent exercises (tier 1: operational) or redefines (tier 2: definitional). This piggybacks on the existing LLM call. The signature is ephemeral -- consumed by impact detection, not stored on the intent node.",
-    "operation_name": "extractPrimitiveSignature",
-    "blocked_by": ["op-client-intake", "op-transduce-external", "op-translate-repr"],
-    "test": {
-      "condition": "When a new intent is processed through clientSession, the LLM response includes a primitive impact signature with impacted primitives and tier classification (operational or definitional).",
-      "verification": "Process a test intent through clientSession, verify the response includes a primitive_signature object with primitives array and tier field."
-    }
-  },
-  {
-    "id": "op-impact-detection",
-    "type": "implement-operation",
-    "name": "DNA-based artifact impact detection",
-    "description": "Given a primitive impact signature from a new intent, query the DNA catalog (expression nodes with primitive_dna) for artifacts whose composition overlaps with the impacted primitives. Tier 1 (operational): select expressions where primitive_dna[P] >= threshold for each impacted primitive P. Tier 2 (definitional): select all expressions where primitive_dna[P] > 0 for each redefined primitive P. Returns a ranked list of expression nodes that may be affected.",
-    "operation_name": "detectImpact",
-    "blocked_by": ["op-assign-dna", "op-primitive-signature"],
-    "test": {
-      "condition": "Given a primitive signature impacting Resolution, detectImpact returns expression nodes ordered by their resolution weight, excluding those below threshold. Given a tier 2 signature redefining Boundary, detectImpact returns all expression nodes with any boundary weight.",
-      "verification": "Create test expressions with known DNA, call detectImpact with tier 1 and tier 2 signatures, verify correct filtering and ordering."
-    }
-  },
-  {
-    "id": "ui-impact-surface",
-    "type": "implement-operation",
-    "name": "Impact surface in projections",
-    "description": "When buildProjection or renderHuman includes an intent that triggered impact detection, the impacted artifacts appear as a related section in the projection output -- 'artifacts potentially affected by this intent.' The human sees which existing work might need re-examination. renderLLM includes the impact list for agent consumption.",
-    "operation_name": "surfaceImpact",
-    "blocked_by": ["op-impact-detection", "op-build-projection", "op-render-human", "op-render-llm"],
-    "test": {
-      "condition": "When buildProjection is called for an intent with impact detection results, the projection includes an impact_surface section listing affected expression nodes with their DNA and the matching primitives.",
-      "verification": "Create a test intent that impacts Resolution, build its projection, verify the output contains an impact_surface section with Resolution-heavy expressions."
-    }
-  }
-]
-```
 
 ### Resolved Decisions
 
@@ -765,7 +702,7 @@ These were originally gaps, now resolved:
 These edges connect the intents above:
 
 ```
-foundation-tables, projection-mechanism, dual-repr, actor-integration, human-surfaces, mcp-server, revaluation, system-origins  ->  (contained by)  ->  gdd-root
+foundation-tables, projection-mechanism, dual-repr, actor-integration, human-surfaces, mcp-server, system-origins  ->  (contained by)  ->  gdd-root
 table-nodes, table-edges, table-graphs, table-graph-memberships, table-agents, table-skills, table-llm-providers, type-node-type, type-edge-type, type-agent-trust, type-agent-status  ->  (contained by)  ->  foundation-tables
 op-create-intent, op-create-edge                                ->  (blocked-by)    ->  foundation-tables
 op-record-expression                                            ->  (blocked-by)    ->  op-create-intent, op-create-edge
@@ -803,9 +740,4 @@ mcp-endpoint, mcp-tools, mcp-connectors                         ->  (contained b
 mcp-endpoint                                                    ->  (blocked-by)    ->  foundation-tables
 mcp-tools                                                       ->  (blocked-by)    ->  mcp-endpoint, op-query-incomplete, op-query-skills, op-build-projection, op-create-intent, op-record-expression, op-link-expression, op-create-gap, op-client-intake, op-query-agents, op-create-decision, op-supersede, op-create-graph, op-add-node-to-graph, op-remove-node-from-graph, op-query-graph-nodes, op-node-graphs, table-llm-providers
 mcp-connectors                                                  ->  (blocked-by)    ->  mcp-endpoint, table-skills
-op-assign-dna, op-primitive-signature, op-impact-detection, ui-impact-surface  ->  (contained by)  ->  revaluation
-op-assign-dna                                                   ->  (blocked-by)    ->  op-record-expression
-op-primitive-signature                                          ->  (blocked-by)    ->  op-client-intake, op-transduce-external, op-translate-repr
-op-impact-detection                                             ->  (blocked-by)    ->  op-assign-dna, op-primitive-signature
-ui-impact-surface                                               ->  (blocked-by)    ->  op-impact-detection, op-build-projection, op-render-human, op-render-llm
 ```

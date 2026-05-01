@@ -38,15 +38,13 @@ The recursion bottoms out somewhere, and the system names that somewhere explici
 
 ### The TOC lineage
 
-The intent graph's approach to prioritization and constraint comes from Goldratt's Theory of Constraints, not from project management.
+The intent graph's structural approach to prioritization draws on Goldratt's Theory of Constraints. TOC asks "what is the constraint, and which work generates the most throughput through the constraint?" The intent graph answers this topologically: the constraint is the agent scope with the most queued red intents, and the highest-leverage work is what unblocks the most downstream dependents.
 
-Traditional project management asks "when should each task happen?" and produces a schedule. TOC asks "what is the constraint, and which work generates the most throughput through the constraint?" The answer determines what to work on — not urgency, not priority scores, not stakeholder pressure.
-
-The intent graph answers this structurally. Throughput values on intents propagate through dependency edges — the total value of satisfying an intent includes the value of everything it unblocks downstream. The constraint is the agent scope (or the team, or the bottleneck resource) with the most queued red intents. Project the constraint against throughput and you get Goldratt's core question answered by the graph itself: which work generates the most value per unit of constraint?
+Throughput accounting — assigning dollar values to intents, computing total downstream value, confidence-weighted prioritization — lives in a separate application (GDD-TOC). The core graph provides the structural substrate that makes TOC analysis possible (dependency chains, downstream counts, red/green state) without embedding value judgments into the graph itself.
 
 The critical chain is not computed by an algorithm. It is the longest chain of red intents where each is blocked-by the previous. It is visible in the projection. Buffer health is the rate of gaps appearing on the critical path versus the rate of red turning green. No separate metrics system — the graph is the metrics.
 
-This is why the system has no priority fields, no urgency scores, no scheduling algorithms. These are unnecessary when the structure itself answers the only question that matters: what to work on next.
+This is why the core system has no priority fields, no urgency scores, no scheduling algorithms, no throughput columns. These are unnecessary when the structure itself answers the only question that matters: what to work on next.
 
 ### Constraints exist across topology, not just in the present
 
@@ -69,9 +67,7 @@ Every artifact the system produces — every expression node, every skill file, 
 
 These are not categories imposed on artifacts after the fact. They are the compositional substrate. An order entry form is heavy Transduction (data crossing contexts), contains Resolution (stock check, credit check), light Trace, minimal Boundary. A permissions screen is almost pure Boundary. A financial close report is heavy Trace, heavy Resolution, minimal Transduction. The primitive composition — the DNA — is what the artifact *is*, structurally.
 
-The primitives matter because they are the routing mechanism for impact detection. When a new intent arrives, its primitive signature — which primitives it exercises or redefines — determines which existing artifacts might be affected. Artifacts whose DNA is weighted toward the impacted primitive are candidates. This is faster and more complete than dependency traversal: two artifacts with no structural connection but heavy shared primitive weight will both surface as impacted. See `skills/revaluation.md` for the full mechanism.
-
-The primitive vocabulary is self-describing. Adding a primitive is a Boundary operation (drawing a new distinction) combined with Resolution (determining the existing set is insufficient). Removing one is Resolution plus Boundary collapse. Redefining one is the most extreme case — a tier 2 event that touches every artifact carrying that primitive. Changes to the vocabulary are expressible in the vocabulary, which means the system can detect and process the need to revise its own foundations through the same mechanism it uses for any other impact.
+The primitives matter as a conceptual lens for understanding what an artifact *is* compositionally. They are not stored in the core graph as computed fields — value estimation and impact scoring live in a separate application (GDD-TOC). The core graph's dependency edges already surface structural impact: if an intent changes, everything downstream of it turns red. The primitives remain useful as a thinking tool for actors reasoning about what kind of work they're doing.
 
 ### Dual representation exists because actors differ
 
@@ -127,11 +123,11 @@ No mechanism for graph reset exists yet. When it does, the operation should be: 
 
 "What should I work on next?" is answered by structure, not by scores.
 
-The system deliberately has no tension scores, no priority weights, no urgency signals, no scheduling algorithms. The answer to "what's next" is: what's red? Among red intents, which one unblocks the most downstream work? If throughput values exist, which one generates the most value per unit of constraint?
+The system deliberately has no tension scores, no priority weights, no urgency signals, no scheduling algorithms. The answer to "what's next" is: what's red? Among red intents, which one unblocks the most downstream work?
 
 These are not computed by a scoring function. They are read from the graph. The dependency structure IS the prioritization. The longest chain of red intents is the critical path. The agent scope with the most queued red intents is the constraint. No algorithm produces these — they are visible in the projection.
 
-When you are building this system, resist adding priority fields, urgency indicators, weight parameters, or sorting heuristics beyond downstream-dependent-count and throughput. Every scoring mechanism you add is an attempt to impose external judgment on a system that derives its own ordering from structure.
+When you are building this system, resist adding priority fields, urgency indicators, weight parameters, or sorting heuristics beyond downstream-dependent-count. Every scoring mechanism you add is an attempt to impose external judgment on a system that derives its own ordering from structure.
 
 ### Forecasts are projections, not commitments
 

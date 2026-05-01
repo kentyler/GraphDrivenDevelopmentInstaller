@@ -46,7 +46,6 @@ A projection of intents over agents produces something like a schedule without a
 
 **No estimates needed.** Traditional scheduling requires duration estimates, which humans are bad at and which introduce padding. The graph doesn't ask "how long will this take?" It asks "what's red, who can work on it, and what does it unblock?" The schedule is the current state of the graph projected over agent scopes — it updates every time an intent turns green or a gap appears.
 
-**Throughput accounting.** Intents carry an optional `throughput` value — expected revenue or value when satisfied. The graph can compute total throughput of satisfying an intent by summing its value plus the value of all downstream intents it unblocks. Project the constraint (the agent scope with the most queued red intents) against throughput, and you get Goldratt's core question answered structurally: which work generates the most throughput per unit of constraint? No spreadsheet, no separate financial model — the value flows through the same dependency edges.
 
 ## Long-term projects
 
@@ -67,7 +66,7 @@ All exist in the present. All are real graph state. The gaps aren't vague plans 
 - Phase 3 comes into focus — its gaps are revisited, some become intents
 - Agent scopes shift to cover newly active phases
 
-The roadmap is a projection. Project it over agent scopes and you see who's working on what. Add throughput values and you see which phases deliver the most value. Watch the red/green ratio over time and you see velocity. Watch gap accumulation on the critical path and you see risk.
+The roadmap is a projection. Project it over agent scopes and you see who's working on what. Watch the red/green ratio over time and you see velocity. Watch gap accumulation on the critical path and you see risk.
 
 No one maintains this roadmap. It maintains itself. Every expression recorded, every gap resolved, every intent created changes the projection. The "2-year plan" is not a document someone updates quarterly — it's the current state of the graph.
 
@@ -123,7 +122,7 @@ Trigger defines *when* the agent activates. The definition is declarative — th
 | Type | Meaning |
 |------|---------|
 | `manual` | Only activated by explicit `activateAgent` call. Default. |
-| `event` | Activated when a specific event occurs in scope. `new-red-in-scope` fires when an intent in the agent's scope becomes active (red). |
+| `event` | Activated when a specific event occurs in scope. `new-red-in-scope` fires when an intent in the agent's scope becomes active (red). `node_created` fires when a new node is created within the agent's scope. `query_included` fires when an intent in scope is included in a query result. |
 | `schedule` | Activated on a cron schedule. Agent runs, processes red intents in scope, stops, waits for next tick. |
 | `continuous` | Always running. Polls for red intents at the specified interval. Pauses when scope is all green, resumes when new red appears. |
 
@@ -182,6 +181,7 @@ Intents can reference agents:
 ## Overlapping scopes
 
 Two agents with overlapping scopes create a `tensions-with` edge worth surfacing. This isn't necessarily wrong — one might be `full` trust and the other `gaps-only` (scout before builder). But overlapping `full` agents on the same intents need human attention.
+
 
 ## Enums
 
