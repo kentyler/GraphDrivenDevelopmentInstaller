@@ -96,6 +96,8 @@ Scope defines which intents the agent operates on. Three forms:
 
 The agent's `queryIncomplete` is filtered to its scope. It cannot see or mutate intents outside its jurisdiction.
 
+**Known gap: board-awareness.** Agent scope definitions do not currently include board-scoping. An agent's jurisdiction is defined by intent IDs, tags, or projection roots -- but not by board membership. As boards become a primary organizational unit (with axioms defining board boundaries and `queryIncomplete` supporting `board_id` filtering), agents will need a way to scope themselves to a board. This is a known gap in the current design, not a deliberate omission.
+
 ### Trust levels
 
 | Level | Can create intents | Can record expressions | Can create gaps | Can create edges |

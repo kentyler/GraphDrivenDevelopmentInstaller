@@ -104,7 +104,9 @@ Work is creating graph elements — nodes and edges. There is no session contain
 ## Conventions
 
 - All graph state lives in the `gdd` schema
-- The graph is write-only — intents are superseded, never removed or modified
+- The graph is write-only — intents are superseded, never removed or modified. Edges are also supersedable via `supersedeEdge` — wrong structural relationships are corrected by creating a replacement edge, not by deleting the old one. Edges carry optional `description` (rationale) and `created_by` (provenance).
 - Never hardcode credentials
-- Test conditions are mandatory on intents — no test, no intent
+- Test conditions are optional on intents — an untested intent is "uncollapsed" (recognized but not yet evaluable). It cannot turn green until a test is added via `setTestCondition` and an expression satisfies it. Test conditions are **write-once** — once set, immutable. To change a test, supersede the intent.
+- Expressions can be recorded without linking to intents — an unlinked expression is "produced but not yet claimed." Use `linkExpression` to connect it later. Query unlinked expressions via `GET /api/unlinked`.
+- The LLM manages the graph autonomously — the human prompts, the LLM structures. Graph operations map to individual reasoning acts (recognize intent, produce artifact, add test, claim satisfaction), each independent and in any order.
 - Commit and push only when source files in the build workspace changed. Graph-only mutations and configuration changes do not produce commits.

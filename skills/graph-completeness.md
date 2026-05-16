@@ -18,6 +18,8 @@ Intents come into existence *with* their expression. There may be a brief transi
 
 **What to do next** = intents without expressions. That's the only signal. No scores, no weights, no signal sources.
 
+**Note (built system):** Tension was removed from intents but reappeared at the board level as an observational instrument. `gdd.tension_readings` records board-level tension -- how much unresolved structural stress a board carries. This is a separate concept from intent-level priority scoring: it measures the health of a boundary region, not the urgency of individual work items. The decision to dissolve intent-level tension stands; board-level tension is diagnostic, not prioritizing.
+
 ### 2. Red/Green (TDD at the architecture level)
 
 The graph is a test suite:
@@ -28,20 +30,22 @@ The graph is a test suite:
 
 Apply a commit, intents appear without expressions, graph goes red. Write the expressions, graph goes green. The red state is intentional and temporary — it's the working state, not an error to manage.
 
-### 3. No intent without a test condition
+### 3. Test conditions are optional -- untested intents are a valid state
 
-Test conditions are mandatory on intent creation. An intent without a test condition is not an intent — it's a vague gesture.
+**Revised from original decision.** Test conditions are no longer mandatory on intent creation. An intent without a test condition is "untested" or "uncollapsed" -- it opens a possibility space that has not yet been made evaluable. It stays permanently red until a test is added and an expression satisfies it.
 
-The test condition *is* the intent. Name and description are human-friendly labels. The test condition is the verifiable claim: what must be true when this intent is satisfied.
+The test condition *is* the evaluable constraint. Name and description are human-friendly labels. The test condition is the verifiable claim: what must be true when this intent is satisfied. But recognition can precede evaluability -- the LLM may know something needs to exist before it can say what done looks like. This is different from a gap (where the blocker is more fundamental).
 
-Following XP: the expression only needs to satisfy the test. It could be a literal string or a complex system. The simplest thing that passes.
+Following XP: no intent turns green without a test. The expression only needs to satisfy the test. It could be a literal string or a complex system. The simplest thing that passes. But creating the intent and writing its test are now independent reasoning acts that can happen in any order.
+
+Similarly, expressions can be recorded without linking to intents -- an "unlinked" expression records production without claiming satisfaction. The LLM links it later via `linkExpression` when it has enough understanding to make that claim.
 
 ### 4. The Andon Cord
 
 If any actor discovers a blocker or cannot articulate a test condition, that's diagnostic information -- the requirement isn't understood well enough, or something is incomplete at a specific location. The actor should:
 
-- **Not** create an intent with a null test condition
-- **Instead** create a `gap` node -- surfacing the blocker for resolution
+- Create an **untested intent** if the need is clear but the test condition is not yet articulable
+- Create a **gap node** if the blocker is more fundamental -- the intent itself cannot be named or scoped
 - When the blocker is resolved, create a `decision` node with a `closes` edge to the gap, then create an expression node with a `satisfies` edge to the gap (artifacts reference the decision). The gap turns green through the normal mechanism.
 
 The gap IS the incompleteness -- no actor attribution metadata is needed because the content carries the perspective. Decisions are the counterpart to gaps: an authored closure recording what was chosen, alternatives considered, and scope governed.
@@ -49,7 +53,7 @@ The gap IS the incompleteness -- no actor attribution metadata is needed because
 Intents are commitments (test defined). Gaps are detected blockers (test not possible yet). Decisions are authored closures (records what was chosen and why). Signals are environmental events (the thing already happened). Compose nodes are structural -- their test is "all children satisfied," not hand-written.
 
 Six node kinds, six test condition rules:
-- **Intent nodes**: test condition required (the verifiable claim)
+- **Intent nodes**: test condition optional (when present, the verifiable claim; when absent, the intent is untested/uncollapsed)
 - **Gap nodes**: no test condition (that's what makes them gaps -- they are blockers)
 - **Decision nodes**: no test condition (they are deliberation nodes, not operational ones)
 - **Signal nodes**: no test condition (the event already happened -- there is nothing to verify)
@@ -91,16 +95,46 @@ Nodes belong to graphs through `gdd.graph_memberships` (a join table), not throu
 
 `satisfies` (expression -> intent) is the seventh edge type. It completes the expression-as-node model: an expression node connects to the intents it satisfies via `satisfies` edges. An intent with at least one incoming `satisfies` edge is green. This replaces the old derivation that checked for a row in `gdd.expressions`. The edge model makes many-to-many satisfaction natural and visible in the graph topology.
 
+### 11. Edge supersession
+
+Edges are structural claims -- "A depends on B", "X satisfies Y". Like intents, structural claims can be wrong. Under write-only semantics, wrong edges cannot be deleted. They must be supersedable.
+
+Three columns added to `gdd.edges`: `description` (rationale for why this relationship exists), `created_by` (provenance), and `superseded_by` (points to the replacement edge, or null if current). `supersedeEdge` creates the replacement edge and sets `superseded_by` on the old one in a single operation. The replacement can change any field -- from_node, to_node, edge_type, description -- or keep some and revise others.
+
+Projections filter to `superseded_by IS NULL`, so superseded edges are invisible in normal operation but remain in the graph as history. An LLM reading a projection sees only current edges, each with its description. When it discovers a wrong edge, it supersedes it -- the history of why the edge existed, who created it, and what replaced it is permanently legible.
+
+This closes the structural evolution gap: nodes were already supersedable via `supersedes` edges, but edges themselves were implicit and irrevocable. Now the full graph topology -- nodes and edges -- supports write-only evolution.
+
+### 12. Axiom as seventh node kind
+
+Axioms are board-level constraints -- statements that govern how work proceeds within a board's scope. They are the seventh node kind alongside intent, gap, decision, signal, expression, and compose.
+
+An axiom node:
+- Requires `notes` and `board_id` (axioms are always board-scoped)
+- Has no `test_condition` -- axioms are not testable claims but governing constraints
+- Is excluded from `queryIncomplete` -- axioms are not work items and should never appear as "red"
+- Is supersedable through the normal `supersedes` edge mechanism when a governing constraint changes
+- Board boundaries are derived from axioms -- the `edge_statement` field (previously considered for boards) was removed in favor of axiom-based boundary definition
+
+Seven node kinds, seven test condition rules:
+- **Intent nodes**: test condition optional (verifiable claim when present; untested/uncollapsed when absent)
+- **Gap nodes**: no test condition (that is what makes them gaps)
+- **Decision nodes**: no test condition (deliberation, not operation)
+- **Signal nodes**: no test condition (event already happened)
+- **Expression nodes**: no test condition (artifacts, not requirements)
+- **Compose nodes**: structural test (all `contains` children satisfied)
+- **Axiom nodes**: no test condition (governing constraints, not testable claims)
+
 ## Impact on Existing Code
 
 ### Must change
-- `createIntent`: reject null/missing `test_condition` for intent types. Accept null for gaps, decisions, signals, expressions, compose. Expression nodes require `artifacts` JSONB.
-- `recordExpression`: now creates an expression node + `satisfies` edge(s), accepts `intent_ids[]` instead of single `intent_id`. No longer inserts into `gdd.expressions` table.
-- `queryIncomplete`: derive red/green from `satisfies` edges, not from `gdd.expressions`. Exclude expression nodes from results.
-- `buildProjection`: include expression nodes linked via `satisfies` edges. Accept optional `graph_id` for scoping via memberships.
+- `createIntent`: accept optional `test_condition` for intent types (untested if null). Accept null for gaps, decisions, signals, expressions, compose. Expression nodes require `artifacts` JSONB.
+- `recordExpression`: now creates an expression node + optional `satisfies` edge(s), accepts optional `intent_ids[]` (empty = unlinked expression). No longer inserts into `gdd.expressions` table.
+- `queryIncomplete`: derive red/green from `satisfies` edges, not from `gdd.expressions`. Exclude expression nodes and axiom nodes from results.
+- `buildProjection`: include expression nodes linked via `satisfies` edges. Accept optional `graph_id` for scoping via memberships. Filter out superseded edges (`superseded_by IS NULL`). Include edge descriptions in projections.
 - `clientSession` LLM prompt: remove "clients cannot create test conditions"; instead instruct: create intent with test if clear, create gap if not
 - `transduceExternal` LLM prompt: same routing -- intent with test or gap
-- `translateToGraph` LLM prompt: always require test_condition for intent types
+- `translateToGraph` LLM prompt: include test_condition when articulable, create untested intent when not
 
 ### New operations
 - `createGap`: convenience operation for creating gap nodes (notes required)
@@ -112,6 +146,9 @@ Nodes belong to graphs through `gdd.graph_memberships` (a join table), not throu
 - `removeNodeFromGraph`: delete a membership from `gdd.graph_memberships`
 - `queryGraphNodes`: list nodes belonging to a graph via memberships
 - `nodeGraphs`: list graphs a node belongs to via memberships
+- `queryUnlinked`: list expression nodes with no `satisfies` edges (produced but unclaimed), optional board_id filter
+- `setTestCondition`: set test_condition on an untested intent (write-once -- once set, immutable; to change, supersede the intent)
+- `supersedeEdge`: create replacement edge and set `superseded_by` on old edge. Replacement inherits from/to/type from old unless overridden.
 
 ### Removed
 - `removeIntent`: no removal under write-only semantics -- replaced by `supersedeIntent`
@@ -123,5 +160,6 @@ Nodes belong to graphs through `gdd.graph_memberships` (a join table), not throu
 - `computeTension`, `queryActive`, `recomputeStatus`: replaced by `queryIncomplete`
 - Status enum: removed -- red/green derived from satisfies edges
 
-### Unchanged
-- `createEdge`: now supports seven edge types (added `supersedes`, `closes`, `satisfies`)
+### Changed
+- `createEdge`: now supports seven edge types (added `supersedes`, `closes`, `satisfies`). Accepts optional `description` and `created_by`.
+- `supersedeIntent`: accepts optional `description` and `created_by` for the supersedes edge.

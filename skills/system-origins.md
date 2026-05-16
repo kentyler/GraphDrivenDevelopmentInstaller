@@ -10,6 +10,8 @@ The self-hosting proof in `foundations.md` says: the graph must be able to repre
 
 Without Layer -1, the system's substrate choice (PostgreSQL) lives only in prose in `intent-graph.md`. That prose is outside the graph's reasoning machinery — it cannot be queried, superseded through normal graph operations, or discovered by an actor asking "why does the system use this database?" Layer -1 makes those decisions first-class graph citizens.
 
+**Note (built system):** The actual bootstrap sequence (`001-enums.sql`, `002-tables.sql`, `003-bootstrap.sql`, `004-populate-graph.js`) does NOT insert Layer -1 nodes. The system-origins intents described in this file were never instantiated in the graph. They remain accurate as founding decisions -- the reasoning and the supersession contract still hold -- but they exist only in this skill file, not as queryable graph state. Inscribing them is deferred, not abandoned.
+
 ## Key property: nodes arrive already green
 
 Every node in this layer is inserted already satisfied. The intent node and its expression node are inserted together, with the `satisfies` edge already present. No actor ever works these intents. They are historical record, not work queue.

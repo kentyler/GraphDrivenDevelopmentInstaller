@@ -103,3 +103,9 @@ The graph makes negotiation concrete:
 This is not automatic graph merging. The merge projection is a view — it shows the intersection and surfaces conflicts. Humans (or agents with appropriate trust and scope) resolve the conflicts. The graph provides structure for negotiation, not a substitute for it.
 
 This is also not federated identity. Each graph remains sovereign. Cross-graph edges are bilateral agreements, not imposed connections. Either party can remove their end of a cross-graph edge (which surfaces as a broken dependency in the other graph — visible, not silent). Shared boundary nodes (nodes with memberships in multiple graphs) are the structural interface between graphs — removing a node's membership in one graph does not affect its membership in others.
+
+## Boards and graphs coexist
+
+In the built system, nodes carry both `board_id` (which board they belong to) and graph memberships (which graphs they participate in). Boards are an organizational unit defined by axioms -- board-scoped constraints that govern how work proceeds within a region of the graph. This means `mergeProjection` would need to account for board context: two nodes in different graphs may also be in different boards, and the axioms governing each board may impose constraints that affect how the merge surfaces conflicts.
+
+`queryIncomplete` and `queryUnlinked` already support `board_id` filtering, giving boards a projection-like scoping role that operates alongside graph memberships. A merge projection that crosses board boundaries should surface axiom conflicts the same way it surfaces test condition conflicts -- as negotiation points, not silent incompatibilities.

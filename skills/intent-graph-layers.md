@@ -12,7 +12,7 @@ Founding decisions (PostgreSQL, Express, MCP SDK, etc.) inscribed as already-gre
 
 ### Layer 0: Foundation -- Schema and Core Types
 
-Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics.
+Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics. The board and edge-node infrastructure tables (boards, edge_nodes, sensitivity_readings, tension_readings, expansion_events, conversion_events) carry temporal metadata (created_at, read_at, occurred_at) because they are accumulating observation records, not graph topology -- readings and events are time-series data by nature.
 
 ```json
 [
@@ -21,16 +21,16 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "type": "compose",
     "name": "Graph foundation tables",
     "description": "The database tables that store the global intent graph.",
-    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status"]
+    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status", "table-boards", "table-edge-nodes", "table-sensitivity-readings", "table-tension-readings", "type-edge-node-status", "type-board-status", "type-board-impact", "type-tension-character"]
   },
   {
     "id": "table-nodes",
     "type": "define-table",
     "name": "Intent nodes table",
-    "description": "Stores all nodes in the global graph. The type column uses the full fixed vocabulary from gdd.node_type (20 values). Intent-category types (define-table, implement-operation, etc.) carry test conditions and can be red/green. compose, gap, decision, signal, and expression are their own categories with distinct behavior. No status column -- red/green is derived by checking for incoming satisfies edges. test_condition is nullable: required for intent-category types, null for gap, decision, signal, and expression, structural for compose. artifacts (JSONB, nullable) is used only by expression nodes.",
+    "description": "Stores all nodes in the global graph. The type column uses the full fixed vocabulary from gdd.node_type (21 values). Intent-category types (define-table, implement-operation, etc.) carry test conditions and can be red/green. compose, gap, decision, signal, expression, and axiom are their own categories with distinct behavior. No status column -- red/green is derived by checking for incoming satisfies edges. test_condition is nullable: required for intent-category types, null for gap, decision, signal, expression, and axiom, structural for compose. artifacts (JSONB, nullable) is used only by expression nodes. board_id (text FK to gdd.boards, nullable) scopes a node to a specific board.",
     "table_name": "gdd.nodes",
     "test": {
-      "condition": "Table exists with columns: id, type (typed as gdd.node_type enum), name, description, test_condition (nullable), test_verification, notes (text, nullable), artifacts (JSONB, nullable). No status column. Red/green is derived by checking for incoming satisfies edges from expression nodes. Gap, decision, signal, and expression nodes have null test_condition. All other non-compose types require a non-null test_condition. Only expression nodes use the artifacts column.",
+      "condition": "Table exists with columns: id, type (typed as gdd.node_type enum), name, description, test_condition (nullable), test_verification, notes (text, nullable), artifacts (JSONB, nullable), board_id (text FK to gdd.boards, nullable). No status column. Red/green is derived by checking for incoming satisfies edges from expression nodes. Gap, decision, signal, expression, and axiom nodes have null test_condition. All other non-compose types require a non-null test_condition. Only expression nodes use the artifacts column.",
       "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='nodes'"
     }
   },
@@ -38,10 +38,10 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "id": "table-edges",
     "type": "define-table",
     "name": "Intent edges table",
-    "description": "Stores directed edges between nodes. Each edge has a type (blocked-by, contains, tensions-with, refines, supersedes, closes, satisfies).",
+    "description": "Stores directed edges between nodes. Each edge has a type (blocked-by, contains, tensions-with, refines, supersedes, closes, satisfies). Edges carry optional description (rationale), created_by (provenance), and superseded_by (points to replacement edge -- null if current). Superseded edges remain as history; current edges are where superseded_by IS NULL.",
     "table_name": "gdd.edges",
     "test": {
-      "condition": "Table exists with columns: id, from_node, to_node, edge_type (typed as gdd.edge_type enum)",
+      "condition": "Table exists with columns: id, from_node, to_node, edge_type (typed as gdd.edge_type enum), description (text, nullable), created_by (text, nullable), superseded_by (text FK to gdd.edges, nullable)",
       "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='edges'"
     }
   },
@@ -104,11 +104,11 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "id": "type-node-type",
     "type": "define-type",
     "name": "Node type enum",
-    "description": "All node types from the fixed vocabulary. Schema types: define-table, define-type, define-schema. Operation types: implement-operation, implement-endpoint, implement-traversal, implement-projection, implement-mutation. Integration types: integrate, derive, translate. Constraint types: constrain-permission, constrain-invariant. Structural types: establish-convention, define-vocabulary, compose. Plus: gap, decision, signal, expression. The system derives the base category from the type value: compose, gap, decision, signal, and expression are their own categories; everything else is an intent (has a test condition, can be red/green, can be satisfied by expressions).",
+    "description": "All node types from the fixed vocabulary. Schema types: define-table, define-type, define-schema. Operation types: implement-operation, implement-endpoint, implement-traversal, implement-projection, implement-mutation. Integration types: integrate, derive, translate. Constraint types: constrain-permission, constrain-invariant. Structural types: establish-convention, define-vocabulary, compose. Plus: gap, decision, signal, expression, axiom. The system derives the base category from the type value: compose, gap, decision, signal, expression, and axiom are their own categories; everything else is an intent (has a test condition, can be red/green, can be satisfied by expressions). Axiom nodes are board-level constraints -- foundational claims that shape the design space.",
     "type_name": "gdd.node_type",
-    "values": ["define-table", "define-type", "define-schema", "implement-operation", "implement-endpoint", "implement-traversal", "implement-projection", "implement-mutation", "integrate", "derive", "translate", "constrain-permission", "constrain-invariant", "establish-convention", "define-vocabulary", "compose", "gap", "decision", "signal", "expression"],
+    "values": ["define-table", "define-type", "define-schema", "implement-operation", "implement-endpoint", "implement-traversal", "implement-projection", "implement-mutation", "integrate", "derive", "translate", "constrain-permission", "constrain-invariant", "establish-convention", "define-vocabulary", "compose", "gap", "decision", "signal", "expression", "axiom"],
     "test": {
-      "condition": "Enum type exists in database with all 20 values from the fixed vocabulary",
+      "condition": "Enum type exists in database with all 21 values from the fixed vocabulary",
       "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.node_type'::regtype"
     }
   },
@@ -147,6 +147,98 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
       "condition": "Enum type exists in database",
       "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.agent_status'::regtype"
     }
+  },
+  {
+    "id": "table-boards",
+    "type": "define-table",
+    "name": "Boards table",
+    "description": "Stores board definitions -- design spaces whose boundaries are derived from their axiom sets. Each board has a statement describing its purpose and a status lifecycle.",
+    "table_name": "gdd.boards",
+    "test": {
+      "condition": "Table gdd.boards exists with columns: id, created_at, created_by, statement, status.",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='boards'"
+    }
+  },
+  {
+    "id": "table-edge-nodes",
+    "type": "define-table",
+    "name": "Edge nodes table",
+    "description": "Stores edge nodes -- boundary markers that should not be resolved. Each edge node belongs to a board, carries content and weight, and tracks its lifecycle status. A source_gap_id links back to the gap node that was converted into this edge node (if applicable).",
+    "table_name": "gdd.edge_nodes",
+    "test": {
+      "condition": "Table gdd.edge_nodes exists with columns: id, board_id, created_at, created_by, name, content, related_nodes, weight, status, source_gap_id.",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='edge_nodes'"
+    }
+  },
+  {
+    "id": "table-sensitivity-readings",
+    "type": "define-table",
+    "name": "Sensitivity readings table",
+    "description": "Accumulating signal readings on edge nodes. Each reading records a signal observation and its assessed impact on the board.",
+    "table_name": "gdd.sensitivity_readings",
+    "test": {
+      "condition": "Table gdd.sensitivity_readings exists with columns: id, edge_node_id, read_at, read_by, signal, board_impact.",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='sensitivity_readings'"
+    }
+  },
+  {
+    "id": "table-tension-readings",
+    "type": "define-table",
+    "name": "Tension readings table",
+    "description": "Board-level tension readings. Each reading records a tension signal on a board, optionally referencing a specific edge node, with a characterization of the tension.",
+    "table_name": "gdd.tension_readings",
+    "test": {
+      "condition": "Table gdd.tension_readings exists with columns: id, board_id, read_at, read_by, signal, edge_node_id, tension_character.",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='tension_readings'"
+    }
+  },
+  {
+    "id": "type-edge-node-status",
+    "type": "define-type",
+    "name": "Edge node status enum",
+    "description": "Edge node lifecycle: active (boundary marker in effect), expanded (boundary became interior work -- gap created), converted (gap was converted to this edge node).",
+    "type_name": "gdd.edge_node_status",
+    "values": ["active", "expanded", "converted"],
+    "test": {
+      "condition": "Enum gdd.edge_node_status exists with values: active, expanded, converted.",
+      "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.edge_node_status'::regtype"
+    }
+  },
+  {
+    "id": "type-board-status",
+    "type": "define-type",
+    "name": "Board status enum",
+    "description": "Board lifecycle: active (design space in use), dormant (paused -- not currently driving work), superseded (replaced by another board).",
+    "type_name": "gdd.board_status",
+    "values": ["active", "dormant", "superseded"],
+    "test": {
+      "condition": "Enum gdd.board_status exists with values: active, dormant, superseded.",
+      "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.board_status'::regtype"
+    }
+  },
+  {
+    "id": "type-board-impact",
+    "type": "define-type",
+    "name": "Board impact enum",
+    "description": "Impact classification for sensitivity readings: stable (no change needed), shifting (boundary moving but containable), reorganizing (fundamental restructuring required).",
+    "type_name": "gdd.board_impact",
+    "values": ["stable", "shifting", "reorganizing"],
+    "test": {
+      "condition": "Enum gdd.board_impact exists with values: stable, shifting, reorganizing.",
+      "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.board_impact'::regtype"
+    }
+  },
+  {
+    "id": "type-tension-character",
+    "type": "define-type",
+    "name": "Tension character enum",
+    "description": "Character of board tension: generative (productive friction that drives design), destabilizing (friction that threatens coherence), expansionary (tension pushing the board's boundaries outward).",
+    "type_name": "gdd.tension_character",
+    "values": ["generative", "destabilizing", "expansionary"],
+    "test": {
+      "condition": "Enum gdd.tension_character exists with values: generative, destabilizing, expansionary.",
+      "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.tension_character'::regtype"
+    }
   }
 ]
 ```
@@ -161,23 +253,23 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-create-intent",
     "type": "implement-operation",
     "name": "Create intent node",
-    "description": "Insert a new node into the global graph. Validates type against the fixed vocabulary. For intent types: test_condition is required -- reject creation if missing or empty. For gap nodes: test_condition must be null, notes field is required. For decision nodes: test_condition must be null, notes field is required. For signal nodes: test_condition must be null, notes field is required (contains the raw event detail). For expression nodes: test_condition must be null, artifacts field is required (JSONB). For compose nodes: test_condition is null in the database -- greenness is derived at query time by checking whether all contains children have incoming satisfies edges. Accepts an optional blocked_by array of intent IDs. If provided, the node is inserted first, then blocked-by edges are created. A new intent has no incoming satisfies edge, so it is red by definition.",
+    "description": "Insert a new node into the global graph. Validates type against the fixed vocabulary. For intent types: test_condition is optional -- when present it is the verifiable claim; when absent the intent is 'untested' (recognized but not yet evaluable). For gap nodes: test_condition must be null, notes field is required. For decision nodes: test_condition must be null, notes field is required. For signal nodes: test_condition must be null, notes field is required (contains the raw event detail). For expression nodes: test_condition must be null, artifacts field is required (JSONB). For compose nodes: test_condition is null in the database -- greenness is derived at query time by checking whether all contains children have incoming satisfies edges. Accepts an optional blocked_by array of intent IDs. If provided, the node is inserted first, then blocked-by edges are created. A new intent has no incoming satisfies edge, so it is red by definition.",
     "operation_name": "createIntent",
-    "input": "Node fields (type, name, description, test, optional blocked_by[], optional notes, optional artifacts JSONB). test.condition is REQUIRED for intent types, null for gaps, decisions, signals, and expressions, null for compose (derived structurally). artifacts is REQUIRED for expression nodes.",
+    "input": "Node fields (type, name, description, test, optional blocked_by[], optional notes, optional artifacts JSONB). test.condition is optional for intent types (untested if null), null for gaps, decisions, signals, and expressions, null for compose (derived structurally). artifacts is REQUIRED for expression nodes.",
     "output": "Created node with id",
     "blocked_by": ["foundation-tables"],
     "test": {
-      "condition": "Can create nodes and retrieve them by id. Rejects intent-type creation if test_condition is null/empty. Accepts gap creation with null test_condition and required notes. Accepts decision creation with null test_condition and required notes. Accepts signal creation with null test_condition and required notes. Accepts expression creation with null test_condition and required artifacts JSONB. Accepts compose creation with structural test. New intent nodes have no incoming satisfies edge (red). Expression nodes are neither red nor green.",
-      "verification": "Integration test: create intent node, gap node, decision node, signal node, expression node, compose node. Verify rejection when intent type has no test_condition. Verify gap, decision, and signal require notes. Verify expression requires artifacts."
+      "condition": "Can create nodes and retrieve them by id. Accepts intent-type creation with or without test_condition (untested if null). Accepts gap creation with null test_condition and required notes. Accepts decision creation with null test_condition and required notes. Accepts signal creation with null test_condition and required notes. Accepts expression creation with null test_condition and required artifacts JSONB. Accepts compose creation with structural test. New intent nodes have no incoming satisfies edge (red). Untested intents show has_test: false in projections. Expression nodes are neither red nor green.",
+      "verification": "Integration test: create intent node (with and without test_condition), gap node, decision node, signal node, expression node, compose node. Verify gap, decision, and signal require notes. Verify expression requires artifacts. Verify untested intent is red with has_test: false."
     }
   },
   {
     "id": "op-create-edge",
     "type": "implement-operation",
     "name": "Create edge",
-    "description": "Insert a directed edge between two nodes. Validates both nodes exist. Validates edge_type against the seven-value enum. A satisfies edge (expression -> intent) makes the target intent green.",
+    "description": "Insert a directed edge between two nodes. Validates both nodes exist. Validates edge_type against the seven-value enum. A satisfies edge (expression -> intent) makes the target intent green. Accepts optional description (rationale for why this relationship exists) and created_by (provenance).",
     "operation_name": "createEdge",
-    "input": "from_node, to_node, edge_type",
+    "input": "from_node, to_node, edge_type, description (optional), created_by (optional)",
     "output": "Created edge",
     "blocked_by": ["foundation-tables"],
     "test": {
@@ -189,14 +281,14 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-record-expression",
     "type": "implement-operation",
     "name": "Record expression",
-    "description": "Record that one or more intents have been satisfied. Creates an expression node (type='expression') with artifacts JSONB, then creates satisfies edges from the expression node to each specified intent. The intents are now green -- they have incoming satisfies edges. Downstream intents that were blocked by these may now be workable. Accepts intent_ids[] (array) to support many-to-many: one expression can satisfy multiple intents.",
+    "description": "Record a produced artifact as an expression node. Creates an expression node (type='expression') with artifacts JSONB. If intent_ids[] is provided, creates satisfies edges from the expression node to each specified intent -- the intents become green. If intent_ids is omitted or empty, the expression is 'unlinked' -- produced but not yet claimed to satisfy anything. The LLM links it later via linkExpression when it has enough understanding. Accepts intent_ids[] (optional array) to support many-to-many: one expression can satisfy multiple intents.",
     "operation_name": "recordExpression",
-    "input": "intent_ids[] (array of intent IDs to satisfy), artifacts (JSONB), name, description (optional summary)",
-    "output": "Created expression node with satisfies edges",
+    "input": "intent_ids[] (optional array of intent IDs to satisfy -- empty = unlinked expression), artifacts (JSONB), name, description (optional summary)",
+    "output": "Created expression node with optional satisfies edges",
     "blocked_by": ["op-create-intent", "op-create-edge"],
     "test": {
-      "condition": "Recording an expression creates an expression node and satisfies edges to each intent in intent_ids[]. Each linked intent is now green (has an incoming satisfies edge). Downstream intents blocked by these become workable if all their other dependencies also have satisfies edges. Supports multiple intent_ids -- one expression satisfying multiple intents.",
-      "verification": "Integration test: create chain A blocks B blocks C. Record expression on A (intent_ids: ['A']), verify B is now workable. Record expression on B, verify C is workable. Test multi-intent: record expression with intent_ids: ['X', 'Y'], verify both X and Y are green."
+      "condition": "Recording an expression creates an expression node. If intent_ids provided, creates satisfies edges and linked intents become green. If intent_ids empty/omitted, expression is unlinked (no satisfies edges). Unlinked expressions appear in queryUnlinked results. Supports multiple intent_ids -- one expression satisfying multiple intents.",
+      "verification": "Integration test: create chain A blocks B blocks C. Record expression on A (intent_ids: ['A']), verify B is now workable. Record unlinked expression (no intent_ids), verify it appears in queryUnlinked. Link it to an intent via linkExpression, verify intent turns green and expression leaves queryUnlinked."
     }
   },
   {
@@ -232,15 +324,15 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-query-incomplete",
     "type": "implement-traversal",
     "name": "Query incomplete intents",
-    "description": "Return all intent nodes that are red (no incoming satisfies edge) and current (not superseded). Expression nodes, decision nodes, and signal nodes are excluded -- expression nodes are artifacts (neither red nor green), decision nodes are deliberation records, and signal nodes are raw events (already happened). Gap nodes ARE included -- they are detected blockers that need resolution. This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Compose nodes are green when all their contains children are green. Ordered by downstream dependent count desc.",
+    "description": "Return all intent nodes that are red (no incoming satisfies edge) and current (not superseded). Expression nodes, decision nodes, signal nodes, and axiom nodes are excluded -- expression nodes are artifacts (neither red nor green), decision nodes are deliberation records, signal nodes are raw events (already happened), and axiom nodes are board-level constraints (not operational work). Gap nodes ARE included -- they are detected blockers that need resolution. This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Compose nodes are green when all their contains children are green. Supports board_id filter to scope results to a specific board. Ordered by downstream dependent count desc.",
     "traversal_name": "queryIncomplete",
     "start": "Global graph",
-    "pattern": "Filter for current nodes (no supersedes edge pointing at them) with no incoming satisfies edge (red). Exclude expression nodes, decision nodes, and signal nodes. Include gap nodes. Optional workable filter checks blocked-by edges. Order by downstream dependent count desc.",
+    "pattern": "Filter for current nodes (no supersedes edge pointing at them) with no incoming satisfies edge (red). Exclude expression nodes, decision nodes, signal nodes, and axiom nodes. Include gap nodes. Optional workable filter checks blocked-by edges. Optional board_id filter scopes to a board. Order by downstream dependent count desc.",
     "returns": "Array of red intent nodes with their downstream dependent counts",
     "blocked_by": ["op-create-intent", "op-create-edge"],
     "test": {
-      "condition": "Returns only red, current intents and gaps (no incoming satisfies edge, not superseded). Does not return green intents (have incoming satisfies edges). Does not return superseded intents. Does not return expression nodes, decision nodes, or signal nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. Ordered by downstream dependent count desc.",
-      "verification": "Integration test: create intents with and without incoming satisfies edges, with and without satisfied dependencies, with and without supersession. Verify filtered and unfiltered queries. Test compose node green derivation. Verify expression nodes are excluded from results."
+      "condition": "Returns only red, current intents and gaps (no incoming satisfies edge, not superseded). Does not return green intents (have incoming satisfies edges). Does not return superseded intents. Does not return expression nodes, decision nodes, signal nodes, or axiom nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. With board_id filter: returns only nodes whose board_id matches. Ordered by downstream dependent count desc.",
+      "verification": "Integration test: create intents with and without incoming satisfies edges, with and without satisfied dependencies, with and without supersession. Verify filtered and unfiltered queries. Test compose node green derivation. Verify expression nodes and axiom nodes are excluded from results. Test board_id scoping."
     }
   },
   {
@@ -287,6 +379,20 @@ These intents are all `blocked-by` the foundation tables.
     }
   },
   {
+    "id": "op-set-test-condition",
+    "type": "implement-operation",
+    "name": "Set test condition on untested intent",
+    "description": "Set the test condition on an untested intent. Write-once: once set, test_condition is immutable. To change a test, supersede the intent. This enforces graph legibility -- every LLM session can see the exact test that was in effect when an expression was recorded, because it never changes. Only applies to intent-category types. Rejects if the intent already has a test condition.",
+    "operation_name": "setTestCondition",
+    "input": "intent_id, test_condition (REQUIRED non-empty), test_verification (optional)",
+    "output": "Updated intent node with test_condition set",
+    "blocked_by": ["op-create-intent"],
+    "test": {
+      "condition": "Sets test_condition on an untested intent. Rejects if intent already has a test condition (write-once). Rejects if node is not an intent type. After setting, the intent shows has_test: true in projections.",
+      "verification": "Create untested intent, set test condition, verify it is set. Attempt to set again, verify rejection with message directing to supersession."
+    }
+  },
+  {
     "id": "op-supersede",
     "type": "implement-operation",
     "name": "Supersede intent",
@@ -298,6 +404,20 @@ These intents are all `blocked-by` the foundation tables.
     "test": {
       "condition": "Creates a supersedes edge (new -> old). The old intent no longer appears in queryIncomplete results (it is superseded). Downstream dependents of the old intent are affected: if they were blocked-by the old intent, they need to be re-evaluated against the new intent.",
       "verification": "Integration test: create intent A, supersede with intent B, verify A no longer appears in queryIncomplete. Verify downstream dependents are correctly affected."
+    }
+  },
+  {
+    "id": "op-supersede-edge",
+    "type": "implement-operation",
+    "name": "Supersede edge",
+    "description": "Create a replacement edge and mark the old edge as superseded. The replacement inherits from_node, to_node, and edge_type from the old edge unless overridden. The old edge's superseded_by column points to the new edge. Superseded edges remain in the graph as history; projections filter to superseded_by IS NULL.",
+    "operation_name": "supersedeEdge",
+    "input": "old_edge_id, from_node (optional override), to_node (optional override), edge_type (optional override), description (optional), created_by (optional)",
+    "output": "{ old_edge (with superseded_by set), new_edge }",
+    "blocked_by": ["op-create-edge"],
+    "test": {
+      "condition": "Creates a replacement edge and sets superseded_by on the old edge. The old edge no longer appears in projections (filtered by superseded_by IS NULL). The replacement edge inherits fields from the old edge unless overridden. Attempting to supersede an already-superseded edge fails.",
+      "verification": "Integration test: create edge, supersede it, verify old edge has superseded_by set, new edge exists, only new edge appears in projection."
     }
   },
   {
@@ -371,6 +491,223 @@ These intents are all `blocked-by` the foundation tables.
       "condition": "Returns all graphs a node belongs to. Returns empty array if node has no memberships.",
       "verification": "Integration test: add node to two graphs, query nodeGraphs, verify both returned."
     }
+  },
+  {
+    "id": "op-create-board",
+    "type": "implement-operation",
+    "name": "Create board",
+    "description": "Create a board with an id, name, and optional statement. Boards are design spaces whose boundaries are derived from their axiom sets. A board starts with 'active' status.",
+    "operation_name": "createBoard",
+    "input": "id, name, statement (optional), created_by (optional)",
+    "output": "Created board row",
+    "blocked_by": ["table-boards"],
+    "test": {
+      "condition": "Can create board with id, name, statement. Board is queryable. Board has default status 'active'.",
+      "verification": "Integration test: create board, verify fields and default status."
+    }
+  },
+  {
+    "id": "op-query-boards",
+    "type": "implement-traversal",
+    "name": "Query boards",
+    "description": "Return all boards, optionally filtered by status. Each board includes its latest tension reading.",
+    "traversal_name": "queryBoards",
+    "start": "gdd.boards table",
+    "pattern": "Filter by status (optional), return boards with latest tension reading",
+    "returns": "Array of boards with latest_tension",
+    "blocked_by": ["op-create-board"],
+    "test": {
+      "condition": "Returns all boards when no filter given. Returns only matching boards when filtered by status. Each board includes latest_tension (or null).",
+      "verification": "Integration test: create boards with different statuses, verify filtered and unfiltered queries."
+    }
+  },
+  {
+    "id": "op-get-board",
+    "type": "implement-traversal",
+    "name": "Get board detail",
+    "description": "Return a single board with its latest tension reading and active edge node count.",
+    "traversal_name": "getBoard",
+    "start": "A board ID",
+    "pattern": "Fetch board, latest tension reading, active edge node count",
+    "returns": "Board with latest_tension and active_edge_node_count",
+    "blocked_by": ["op-create-board"],
+    "test": {
+      "condition": "Returns board with latest_tension and active_edge_node_count. Returns 404 if board does not exist.",
+      "verification": "Integration test: create board, add tension reading and edge nodes, verify detail includes counts."
+    }
+  },
+  {
+    "id": "op-update-board-statement",
+    "type": "implement-operation",
+    "name": "Update board statement",
+    "description": "Update the statement on an existing board. The statement describes the board's purpose and design space.",
+    "operation_name": "updateBoardStatement",
+    "input": "board_id, statement",
+    "output": "Updated board row",
+    "blocked_by": ["op-create-board"],
+    "test": {
+      "condition": "Can update a board's statement. Returns 404 if board does not exist.",
+      "verification": "Integration test: create board, update statement, verify new statement persists."
+    }
+  },
+  {
+    "id": "op-record-tension",
+    "type": "implement-operation",
+    "name": "Record tension reading",
+    "description": "Record a tension observation on a board. A tension reading captures a signal about the board's state, optionally referencing a specific edge node and characterizing the tension type.",
+    "operation_name": "recordTensionReading",
+    "input": "board_id, signal, read_by (optional), edge_node_id (optional), tension_character (optional: generative, destabilizing, expansionary)",
+    "output": "Created tension reading",
+    "blocked_by": ["table-tension-readings", "op-create-board"],
+    "test": {
+      "condition": "Tension reading created with board_id, signal, tension_character. Visible in getBoard's latest_tension.",
+      "verification": "Integration test: create board, record tension, verify in getBoard detail."
+    }
+  },
+  {
+    "id": "op-assign-node-to-board",
+    "type": "implement-operation",
+    "name": "Assign node to board",
+    "description": "Set the board_id on an existing node, scoping it to a specific board. Verifies both the board and node exist.",
+    "operation_name": "assignNodeToBoard",
+    "input": "node_id, board_id",
+    "output": "Updated node with board_id set",
+    "blocked_by": ["op-create-board", "op-create-intent"],
+    "test": {
+      "condition": "Can assign a node to a board. Node's board_id is updated. Returns 404 if board or node does not exist.",
+      "verification": "Integration test: create board and node, assign, verify board_id on node."
+    }
+  },
+  {
+    "id": "op-query-board-nodes",
+    "type": "implement-traversal",
+    "name": "Query board nodes",
+    "description": "Return all nodes belonging to a board (via board_id column on nodes). Supports optional type filter.",
+    "traversal_name": "queryBoardNodes",
+    "start": "A board ID",
+    "pattern": "Filter nodes by board_id, optional type filter",
+    "returns": "Array of nodes belonging to the board",
+    "blocked_by": ["op-assign-node-to-board"],
+    "test": {
+      "condition": "Returns all nodes with matching board_id. With type filter, returns only matching types. Returns empty array if no nodes on board.",
+      "verification": "Integration test: assign nodes to board, query with and without type filter."
+    }
+  },
+  {
+    "id": "op-create-edge-node",
+    "type": "implement-operation",
+    "name": "Create edge node",
+    "description": "Create an edge node on a board with name, content, and optional weight. Edge nodes are boundary markers that should not be resolved. They do not appear in queryIncomplete results.",
+    "operation_name": "createEdgeNode",
+    "input": "name, board_id, id (optional), content (optional), related_nodes (optional array), weight (optional), created_by (optional)",
+    "output": "Created edge node with default status 'active'",
+    "blocked_by": ["table-edge-nodes", "op-create-board"],
+    "test": {
+      "condition": "Can create edge node with board_id, name, content. Edge node is queryable. Does not appear in queryIncomplete.",
+      "verification": "Integration test: create edge node, verify isolation from queryIncomplete."
+    }
+  },
+  {
+    "id": "op-query-edge-nodes",
+    "type": "implement-traversal",
+    "name": "Query edge nodes",
+    "description": "Return edge nodes, optionally filtered by board_id and/or status. Each edge node includes its latest sensitivity reading.",
+    "traversal_name": "queryEdgeNodes",
+    "start": "gdd.edge_nodes table",
+    "pattern": "Filter by board_id (optional), status (optional), return with latest sensitivity reading",
+    "returns": "Array of edge nodes with latest_reading",
+    "blocked_by": ["op-create-edge-node"],
+    "test": {
+      "condition": "Returns all edge nodes when no filter given. Supports board_id and status filters. Each edge node includes latest_reading (or null).",
+      "verification": "Integration test: create edge nodes on different boards, verify filtered queries."
+    }
+  },
+  {
+    "id": "op-get-edge-node",
+    "type": "implement-traversal",
+    "name": "Get edge node detail",
+    "description": "Return a single edge node with its full history: all sensitivity readings, expansion events, and conversion events.",
+    "traversal_name": "getEdgeNode",
+    "start": "An edge node ID",
+    "pattern": "Fetch edge node with sensitivity readings, expansion events, conversion events",
+    "returns": "Edge node with sensitivity_readings, expansion_events, conversion_events arrays",
+    "blocked_by": ["op-create-edge-node"],
+    "test": {
+      "condition": "Returns edge node with full history. Returns 404 if edge node does not exist.",
+      "verification": "Integration test: create edge node, record readings, verify detail includes all history."
+    }
+  },
+  {
+    "id": "op-record-sensitivity",
+    "type": "implement-operation",
+    "name": "Record sensitivity reading",
+    "description": "Record a signal observation on an edge node. Each reading captures what was observed and its assessed impact on the board.",
+    "operation_name": "recordSensitivityReading",
+    "input": "edge_node_id, signal, read_by (optional), board_impact (optional: stable, shifting, reorganizing)",
+    "output": "Created sensitivity reading",
+    "blocked_by": ["table-sensitivity-readings", "op-create-edge-node"],
+    "test": {
+      "condition": "Sensitivity reading created with edge_node_id, signal, board_impact. Visible in getEdgeNode detail.",
+      "verification": "Integration test: create edge node, record reading, verify in getEdgeNode."
+    }
+  },
+  {
+    "id": "op-convert-gap-to-edge",
+    "type": "implement-operation",
+    "name": "Convert gap to edge node",
+    "description": "Convert a gap node to an edge node -- marks a boundary that should not be resolved. Creates a decision node closing the gap, creates an edge node with source_gap_id pointing back to the gap, and records a conversion event. The gap no longer appears in queryIncomplete because it is closed by the decision.",
+    "operation_name": "convertGapToEdge",
+    "input": "gap_id, board_id, content (optional), description (optional), failed_articulation_attempts (optional array), created_by (optional)",
+    "output": "{ edge_node, decision }",
+    "blocked_by": ["op-create-edge-node", "op-create-decision"],
+    "test": {
+      "condition": "Creates decision closing gap, creates edge node with source_gap_id, creates conversion event. Gap no longer in queryIncomplete.",
+      "verification": "Integration test: create gap, convert, verify decision, edge node, and conversion event."
+    }
+  },
+  {
+    "id": "op-expand-edge-node",
+    "type": "implement-operation",
+    "name": "Expand edge node",
+    "description": "Expand an active edge node into a gap -- the boundary becomes interior work. The edge node's status changes to 'expanded', a new gap node is created with the edge node's board_id, and an expansion event is recorded. Only active edge nodes can be expanded.",
+    "operation_name": "expandEdgeNode",
+    "input": "edge_node_id, gap_name, gap_notes, description (optional), created_by (optional)",
+    "output": "{ edge_node (status: expanded), gap (new gap node) }",
+    "blocked_by": ["op-create-edge-node", "op-create-gap"],
+    "test": {
+      "condition": "Edge node status changes to expanded. New gap node created with board_id. Expansion event recorded. Only active edge nodes can be expanded.",
+      "verification": "Integration test: create edge node, expand, verify gap and status change. Attempt to expand non-active edge node, verify rejection."
+    }
+  },
+  {
+    "id": "op-query-unlinked",
+    "type": "implement-traversal",
+    "name": "Query unlinked expressions",
+    "description": "Return expression nodes that have no outgoing satisfies edges -- produced but not yet claimed to satisfy any intent. Supports optional board_id filter.",
+    "traversal_name": "queryUnlinked",
+    "start": "Global graph",
+    "pattern": "Filter for expression nodes with no outgoing satisfies edge, optional board_id filter",
+    "returns": "Array of unlinked expression nodes",
+    "blocked_by": ["op-record-expression"],
+    "test": {
+      "condition": "Returns only expression nodes with no satisfies edges. Linked expressions are excluded. Supports board_id scoping.",
+      "verification": "Integration test: record linked and unlinked expressions, verify only unlinked are returned."
+    }
+  },
+  {
+    "id": "op-query-current-nodes",
+    "type": "implement-traversal",
+    "name": "Query current nodes by pattern",
+    "description": "Return current (non-superseded) nodes whose id matches a prefix pattern. Used for node lookup by ID prefix.",
+    "traversal_name": "queryCurrentNodes",
+    "start": "Global graph",
+    "pattern": "Filter by id prefix pattern, exclude superseded nodes",
+    "returns": "Array of matching current nodes",
+    "blocked_by": ["op-create-intent"],
+    "test": {
+      "condition": "Returns nodes matching the id prefix. Does not return superseded nodes.",
+      "verification": "Integration test: create nodes, supersede one, query by prefix, verify superseded node excluded."
+    }
   }
 ]
 ```
@@ -392,15 +729,15 @@ These intents are blocked by Layer 1 operations.
     "id": "op-build-projection",
     "type": "implement-projection",
     "name": "Build projection from intent",
-    "description": "Given an intent node as vantage point, construct a projection: the intent itself, its dependency chain (up and down), red/green status on each node (derived from incoming satisfies edges), test conditions, gaps in the neighborhood, decisions that close those gaps, expression nodes linked via satisfies edges, and supersession context. An intent is current if it has no incoming supersedes edge -- this is the only rule, deliberately simple. The projection is a subgraph with all context needed to understand and act on this intent. Optionally accepts a graph_id to scope the projection to nodes within a specific graph (via graph_memberships).",
+    "description": "Given an intent node as vantage point, construct a projection: the intent itself, its dependency chain (up and down), red/green status on each node (derived from incoming satisfies edges), test conditions, gaps in the neighborhood, decisions that close those gaps, expression nodes linked via satisfies edges, and supersession context. An intent is current if it has no incoming supersedes edge -- this is the only rule, deliberately simple. If the vantage node has a board_id, the projection also includes the board (with latest tension reading), active edge nodes on that board (each with latest sensitivity reading), and current axiom nodes for that board. The projection is a subgraph with all context needed to understand and act on this intent. Optionally accepts a graph_id to scope the projection to nodes within a specific graph (via graph_memberships).",
     "projection_name": "buildProjection",
     "source": "Global intent graph (or scoped to a graph via graph_id)",
     "vantage": "A single intent node",
-    "shape": "Subgraph centered on the vantage intent, with dependency chain, red/green status, test conditions, gaps, decisions, expression nodes, and supersession chains in the neighborhood",
+    "shape": "Subgraph centered on the vantage intent, with dependency chain, red/green status, test conditions, gaps, decisions, expression nodes, supersession chains, board context (if applicable: board with tension, axioms, edge nodes with sensitivity readings)",
     "blocked_by": ["op-traverse-dependencies"],
     "test": {
-      "condition": "Given intent C in a chain A->B->C->D, projection from C includes: C's full node data, A and B as upstream deps with their statuses (derived from satisfies edges), D as downstream dependent, red/green state on each, expression nodes linked via satisfies edges, any gaps and decisions in the neighborhood, any supersession chains affecting the subgraph. When graph_id is provided, projection is scoped to nodes in that graph's memberships.",
-      "verification": "Integration test: build known graph, project from a middle node, verify subgraph shape. Test with graph_id scoping."
+      "condition": "Given intent C in a chain A->B->C->D, projection from C includes: C's full node data, A and B as upstream deps with their statuses (derived from satisfies edges), D as downstream dependent, red/green state on each, expression nodes linked via satisfies edges, any gaps and decisions in the neighborhood, any supersession chains affecting the subgraph. When graph_id is provided, projection is scoped to nodes in that graph's memberships. When the vantage node has a board_id, projection includes: board (with latest tension reading), axioms (current non-superseded axiom nodes for that board), and edgeNodes (active edge nodes with latest sensitivity readings).",
+      "verification": "Integration test: build known graph, project from a middle node, verify subgraph shape. Test with graph_id scoping. Test board context inclusion for board-scoped intents."
     }
   }
 ]
@@ -421,13 +758,13 @@ These intents are blocked by Layer 1 operations.
     "id": "op-render-human",
     "type": "translate",
     "name": "Render human-legible view",
-    "description": "Given a projection (a subgraph), produce a human-readable summary: what the intents are about, what's green (has incoming satisfies edges), what's red (no incoming satisfies edges), what's blocked (red with unsatisfied dependencies), key decisions made. Narrative form, not graph structure.",
+    "description": "Given a projection (a subgraph), produce a human-readable summary: what the intents are about, what's green (has incoming satisfies edges), what's red (no incoming satisfies edges), what's blocked (red with unsatisfied dependencies), key decisions made. Includes board context (if present): board statement with latest tension, axioms as board constraints, and edge nodes as boundaries not to be resolved. Narrative form, not graph structure.",
     "from_repr": "Projection (graph structure)",
     "to_repr": "Human-readable summary (markdown or structured text)",
-    "mechanism": "Deterministic rendering. The projection already contains structured data -- group intents by red/green/blocked (derived from satisfies edges and dependency traversal), format as markdown. No LLM needed for the base rendering. An LLM layer can be added on top for narrative polish, but the base is a deterministic formatter.",
+    "mechanism": "Deterministic rendering. The projection already contains structured data -- group intents by red/green/blocked (derived from satisfies edges and dependency traversal), format as markdown. Board section shows board statement and tension. Axioms section lists board constraints. Edge Nodes section lists boundaries with latest sensitivity readings. No LLM needed for the base rendering. An LLM layer can be added on top for narrative polish, but the base is a deterministic formatter.",
     "blocked_by": ["projection-mechanism"],
     "test": {
-      "condition": "A projection with 5 intents (2 green, 2 red and workable, 1 red and blocked) produces a summary that a non-technical reader can understand: what's done, what needs work, what's blocked.",
+      "condition": "A projection with 5 intents (2 green, 2 red and workable, 1 red and blocked) produces a summary that a non-technical reader can understand: what's done, what needs work, what's blocked. When board context is present, includes Board, Axioms, and Edge Nodes sections.",
       "verification": "Generate summary from known projection, human review for clarity"
     }
   },
@@ -435,13 +772,13 @@ These intents are blocked by Layer 1 operations.
     "id": "op-render-llm",
     "type": "translate",
     "name": "Render LLM-legible view",
-    "description": "Given a projection, produce a dense structured representation optimized for LLM consumption: full node data, edge types, red/green status, test conditions, dependency chains. This replaces the system prompt -- the LLM reads this to understand its situation.",
+    "description": "Given a projection, produce a dense structured representation optimized for LLM consumption: full node data, edge types, red/green status, test conditions, dependency chains, board context (board with tension, axioms, edge nodes with sensitivity readings). This replaces the system prompt -- the LLM reads this to understand its situation.",
     "from_repr": "Projection (graph structure)",
     "to_repr": "Structured JSON with full relational detail",
-    "mechanism": "Direct serialization of graph structure with computed fields (status, completeness)",
+    "mechanism": "Direct serialization of graph structure with computed fields (status, completeness). Board/axiom/edge-node context included when the vantage node has a board_id.",
     "blocked_by": ["projection-mechanism"],
     "test": {
-      "condition": "LLM-legible rendering includes all node fields, all edges, red/green status, test conditions. An LLM reading this output can determine what to work on next without any additional context.",
+      "condition": "LLM-legible rendering includes all node fields, all edges, red/green status, test conditions. When board context is present, includes board (with latest tension), axioms array, and edge_nodes array (with latest sensitivity readings). An LLM reading this output can determine what to work on next without any additional context.",
       "verification": "Feed rendering to an LLM, ask it to identify the highest-priority work, verify it selects correctly"
     }
   },
@@ -646,7 +983,7 @@ The MCP server makes the graph reachable from external tools. It runs inside the
     "type": "compose",
     "name": "MCP server for execution surfaces",
     "description": "Exposes graph operations over the Model Context Protocol so external tools (Excel, Word, PowerPoint, Claude Desktop, any MCP-capable application) can connect to the graph. Most MCP tools map directly to existing graph operations. Some (like ask and configure_provider) compose multiple operations or expose infrastructure configuration. See skills/mcp-server.md for implementation details.",
-    "children": ["mcp-endpoint", "mcp-tools", "mcp-connectors"]
+    "children": ["mcp-endpoint", "mcp-tools", "mcp-board-edge-tools", "mcp-working-intent-tools", "mcp-connectors"]
   },
   {
     "id": "mcp-endpoint",
@@ -665,12 +1002,36 @@ The MCP server makes the graph reachable from external tools. It runs inside the
     "id": "mcp-tools",
     "type": "implement-operation",
     "name": "MCP tool definitions",
-    "description": "Register graph operations as MCP tools: ask (natural language entry -- creates graph elements directly), query_incomplete, query_skills, build_projection, create_intent, record_expression, link_expression, create_gap, create_decision, supersede_intent, query_agents, configure_provider, create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs. Each tool maps to an existing graph operation or infrastructure endpoint -- no new logic, just protocol translation. See skills/mcp-server.md for tool specifications.",
+    "description": "Register core graph operations as MCP tools: ask (natural language entry), query_incomplete, query_skills, query_unlinked, build_projection, create_intent, record_expression, link_expression, set_test_condition, create_gap, create_decision, supersede_intent, supersede_edge, create_edge, query_agents, configure_provider, create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs. Each tool maps to an existing graph operation or infrastructure endpoint -- no new logic, just protocol translation. See skills/mcp-server.md for tool specifications.",
     "operation_name": "registerMcpTools",
-    "blocked_by": ["mcp-endpoint", "op-query-incomplete", "op-query-skills", "op-build-projection", "op-create-intent", "op-record-expression", "op-link-expression", "op-create-gap", "op-client-intake", "op-query-agents", "op-create-decision", "op-supersede", "op-create-graph", "op-add-node-to-graph", "op-remove-node-from-graph", "op-query-graph-nodes", "op-node-graphs", "table-llm-providers"],
+    "blocked_by": ["mcp-endpoint", "op-query-incomplete", "op-query-skills", "op-query-unlinked", "op-build-projection", "op-create-intent", "op-record-expression", "op-link-expression", "op-set-test-condition", "op-create-gap", "op-client-intake", "op-query-agents", "op-create-decision", "op-supersede", "op-supersede-edge", "op-create-graph", "op-add-node-to-graph", "op-remove-node-from-graph", "op-query-graph-nodes", "op-node-graphs", "table-llm-providers"],
     "test": {
-      "condition": "All MCP tools are registered and callable. The ask tool creates an intent and returns a result. The query_incomplete tool returns red intents. The record_expression tool creates expression nodes with satisfies edges. The link_expression tool adds satisfies edges to existing expressions. The configure_provider tool can list and set active providers. The create_decision tool creates decisions. The supersede_intent tool creates supersession edges. The graph tools (create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs) manage graph memberships. Each tool produces the same result as calling the equivalent REST endpoint.",
+      "condition": "All core MCP tools are registered and callable. The ask tool creates an intent and returns a result. The query_incomplete tool returns red intents. The record_expression tool creates expression nodes with satisfies edges. The link_expression tool adds satisfies edges to existing expressions. The set_test_condition tool sets test conditions on untested intents. The query_unlinked tool returns unlinked expressions. The configure_provider tool can list and set active providers. The create_decision tool creates decisions. The supersede_intent tool creates supersession edges. The graph tools (create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs) manage graph memberships. Each tool produces the same result as calling the equivalent REST endpoint.",
       "verification": "Call each MCP tool through an MCP client and verify results match the equivalent REST API calls."
+    }
+  },
+  {
+    "id": "mcp-board-edge-tools",
+    "type": "implement-operation",
+    "name": "MCP board, edge-node, and axiom tools",
+    "description": "Register board, edge-node, and axiom operations as MCP tools: create_board, query_boards, get_board, record_tension_reading, assign_node_to_board, query_board_axioms, create_edge_node, query_edge_nodes, get_edge_node, record_sensitivity_reading, convert_gap_to_edge, expand_edge_node. Each tool maps to an existing operation -- no new logic, just protocol translation.",
+    "operation_name": "registerMcpBoardEdgeTools",
+    "blocked_by": ["mcp-endpoint", "op-create-board", "op-query-boards", "op-get-board", "op-record-tension", "op-assign-node-to-board", "op-create-edge-node", "op-query-edge-nodes", "op-get-edge-node", "op-record-sensitivity", "op-convert-gap-to-edge", "op-expand-edge-node"],
+    "test": {
+      "condition": "All board and edge-node MCP tools are registered and callable. The create_board tool creates a board. The query_boards tool lists boards. The get_board tool returns board detail with tension. The record_tension_reading tool records tension. The assign_node_to_board tool assigns a node to a board. The query_board_axioms tool returns current axioms for a board. The create_edge_node tool creates an edge node. The query_edge_nodes tool lists edge nodes. The get_edge_node tool returns edge node detail. The record_sensitivity_reading tool records a reading. The convert_gap_to_edge tool converts a gap to an edge node. The expand_edge_node tool expands an edge node into a gap. Each tool produces the same result as calling the equivalent REST endpoint.",
+      "verification": "Call each board and edge-node MCP tool through an MCP client and verify results match the equivalent REST API calls."
+    }
+  },
+  {
+    "id": "mcp-working-intent-tools",
+    "type": "implement-operation",
+    "name": "MCP working-intent tools",
+    "description": "Register working-intent tools as MCP tools: select_working_intent, clear_working_intent, get_working_intent. These manage a file-based working-intent bookmark (~/.claude/hooks/gdd-working-intent.json) that records which intent(s) an actor is currently focused on. The select tool validates all intent IDs exist before persisting. The get tool retrieves the current selection. The clear tool removes the bookmark.",
+    "operation_name": "registerMcpWorkingIntentTools",
+    "blocked_by": ["mcp-endpoint", "op-create-intent"],
+    "test": {
+      "condition": "The select_working_intent tool validates intent IDs and persists the selection to the working-intent file. The get_working_intent tool returns the current selection (or reports none). The clear_working_intent tool removes the selection. Selecting non-existent intent IDs returns an error.",
+      "verification": "Create intents, select them as working intents via MCP, verify file written. Get working intent, verify match. Clear, verify cleared. Attempt to select non-existent IDs, verify error."
     }
   },
   {
@@ -703,7 +1064,7 @@ These edges connect the intents above:
 
 ```
 foundation-tables, projection-mechanism, dual-repr, actor-integration, human-surfaces, mcp-server, system-origins  ->  (contained by)  ->  gdd-root
-table-nodes, table-edges, table-graphs, table-graph-memberships, table-agents, table-skills, table-llm-providers, type-node-type, type-edge-type, type-agent-trust, type-agent-status  ->  (contained by)  ->  foundation-tables
+table-nodes, table-edges, table-graphs, table-graph-memberships, table-agents, table-skills, table-llm-providers, type-node-type, type-edge-type, type-agent-trust, type-agent-status, table-boards, table-edge-nodes, table-sensitivity-readings, table-tension-readings, type-edge-node-status, type-board-status, type-board-impact, type-tension-character  ->  (contained by)  ->  foundation-tables
 op-create-intent, op-create-edge                                ->  (blocked-by)    ->  foundation-tables
 op-record-expression                                            ->  (blocked-by)    ->  op-create-intent, op-create-edge
 op-link-expression                                              ->  (blocked-by)    ->  op-record-expression
@@ -712,12 +1073,34 @@ op-query-incomplete                                             ->  (blocked-by)
 op-query-skills                                                 ->  (blocked-by)    ->  table-skills
 op-create-gap                                                   ->  (blocked-by)    ->  op-create-intent
 op-create-decision                                              ->  (blocked-by)    ->  op-create-intent, op-create-edge
+op-set-test-condition                                           ->  (blocked-by)    ->  op-create-intent
 op-supersede                                                    ->  (blocked-by)    ->  op-create-intent, op-create-edge
+op-supersede-edge                                               ->  (blocked-by)    ->  op-create-edge
 op-create-graph                                                 ->  (blocked-by)    ->  foundation-tables
 op-add-node-to-graph                                            ->  (blocked-by)    ->  op-create-graph, op-create-intent
 op-remove-node-from-graph                                       ->  (blocked-by)    ->  op-add-node-to-graph
 op-query-graph-nodes                                            ->  (blocked-by)    ->  op-add-node-to-graph
 op-node-graphs                                                  ->  (blocked-by)    ->  op-add-node-to-graph
+op-create-board                                                 ->  (blocked-by)    ->  table-boards
+op-query-boards                                                 ->  (blocked-by)    ->  op-create-board
+op-get-board                                                    ->  (blocked-by)    ->  op-create-board
+op-update-board-statement                                       ->  (blocked-by)    ->  op-create-board
+op-record-tension                                               ->  (blocked-by)    ->  table-tension-readings, op-create-board
+op-assign-node-to-board                                         ->  (blocked-by)    ->  op-create-board, op-create-intent
+op-query-board-nodes                                            ->  (blocked-by)    ->  op-assign-node-to-board
+op-create-edge-node                                             ->  (blocked-by)    ->  table-edge-nodes, op-create-board
+op-query-edge-nodes                                             ->  (blocked-by)    ->  op-create-edge-node
+op-get-edge-node                                                ->  (blocked-by)    ->  op-create-edge-node
+op-record-sensitivity                                           ->  (blocked-by)    ->  table-sensitivity-readings, op-create-edge-node
+op-convert-gap-to-edge                                          ->  (blocked-by)    ->  op-create-edge-node, op-create-decision
+op-expand-edge-node                                             ->  (blocked-by)    ->  op-create-edge-node, op-create-gap
+op-query-unlinked                                               ->  (blocked-by)    ->  op-record-expression
+op-query-current-nodes                                          ->  (blocked-by)    ->  op-create-intent
+table-boards                                                    ->  (blocked-by)    ->  foundation-tables
+table-edge-nodes                                                ->  (blocked-by)    ->  table-boards
+table-sensitivity-readings                                      ->  (blocked-by)    ->  table-edge-nodes
+table-tension-readings                                          ->  (blocked-by)    ->  table-boards
+type-edge-node-status, type-board-status, type-board-impact, type-tension-character  ->  (blocked-by)  ->  foundation-tables
 op-build-projection                                             ->  (contained by)  ->  projection-mechanism
 op-render-human, op-render-llm, op-translate-repr               ->  (contained by)  ->  dual-repr
 op-transduce-external, op-client-intake, op-define-agent, op-activate-agent, op-query-agents  ->  (contained by)  ->  actor-integration
@@ -736,8 +1119,10 @@ ui-dashboard                                                    ->  (blocked-by)
 ui-intent-detail                                                ->  (blocked-by)    ->  op-build-projection, op-render-human
 ui-gap-surface                                                  ->  (blocked-by)    ->  op-render-human
 ui-client-intake                                                ->  (blocked-by)    ->  op-client-intake, op-render-human, mcp-tools
-mcp-endpoint, mcp-tools, mcp-connectors                         ->  (contained by)  ->  mcp-server
+mcp-endpoint, mcp-tools, mcp-board-edge-tools, mcp-working-intent-tools, mcp-connectors  ->  (contained by)  ->  mcp-server
 mcp-endpoint                                                    ->  (blocked-by)    ->  foundation-tables
-mcp-tools                                                       ->  (blocked-by)    ->  mcp-endpoint, op-query-incomplete, op-query-skills, op-build-projection, op-create-intent, op-record-expression, op-link-expression, op-create-gap, op-client-intake, op-query-agents, op-create-decision, op-supersede, op-create-graph, op-add-node-to-graph, op-remove-node-from-graph, op-query-graph-nodes, op-node-graphs, table-llm-providers
+mcp-tools                                                       ->  (blocked-by)    ->  mcp-endpoint, op-query-incomplete, op-query-skills, op-query-unlinked, op-build-projection, op-create-intent, op-record-expression, op-link-expression, op-set-test-condition, op-create-gap, op-client-intake, op-query-agents, op-create-decision, op-supersede, op-supersede-edge, op-create-graph, op-add-node-to-graph, op-remove-node-from-graph, op-query-graph-nodes, op-node-graphs, table-llm-providers
+mcp-board-edge-tools                                            ->  (blocked-by)    ->  mcp-endpoint, op-create-board, op-query-boards, op-get-board, op-record-tension, op-assign-node-to-board, op-create-edge-node, op-query-edge-nodes, op-get-edge-node, op-record-sensitivity, op-convert-gap-to-edge, op-expand-edge-node
+mcp-working-intent-tools                                        ->  (blocked-by)    ->  mcp-endpoint, op-create-intent
 mcp-connectors                                                  ->  (blocked-by)    ->  mcp-endpoint, table-skills
 ```

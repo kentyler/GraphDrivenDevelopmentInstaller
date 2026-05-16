@@ -1,95 +1,59 @@
 # Session Continuity
 
-LLM actors arrive without context. The graph solves this the same way it solves everything else — with intents and expressions.
-
-## The problem
-
-Every new LLM session starts cold. The actor doesn't know what was done, what's next, or what's unresolved. This is a structural gap, not a per-session accident. It recurs every time any LLM actor connects.
+LLM actors arrive without context. The graph solves this with supersede chains — each session creates a new intent that supersedes the previous one.
 
 ## The mechanism
 
-Each actor gets a persistent intent: `session-context-{actor-id}`. Its test condition is: the arriving LLM can project from this node and recover full working context without consulting any other source.
+Each actor gets a chain of intents starting with `session-context-{actor-id}`. Each session creates a new intent (e.g. `session-context-claude-code-20260429T1430`) with an expression recording the session's work, then supersedes the previous tip. The non-superseded node is always the current bookmark.
 
-At the end of each session, the actor records an expression satisfying this intent. The expression carries:
-
-- **name**: session date and summary headline
-- **description**: narrative of what happened
-- **artifacts**: structured JSON with fields:
-  - `actor` — who recorded this
-  - `session_date` — when
-  - `project` — which project
-  - `completed` — what was done
-  - `next` — what should happen next
-  - `open_questions` — what's unresolved
-
-Each new session-end expression adds to the chain. The expressions accumulate as the development history — the graph embeds the project narrative through its normal operation.
+The `/api/current` endpoint finds the tip of the chain: it queries for nodes matching an ID pattern that have no incoming `supersedes` edge.
 
 ## Startup routine
 
-An arriving LLM's first action:
+An arriving LLM's first actions:
 
 ```
-GET /api/projection/session-context-{actor-id}/llm
+GET /api/current?pattern=session-context-{actor-id}
 ```
 
-One call. The response contains the vantage intent, all expressions (most recent is the current bookmark), and any gaps or decisions in the neighborhood. The actor reads the latest expression's artifacts and is oriented.
-
-## Per-actor scoping
-
-Session context is scoped per actor, not shared. Each actor maintains its own bookmark chain:
-
-- `session-context-claude-code` — a Claude Code instance's working context
-- `session-context-ken` — a human developer's context
-- `session-context-copilot` — another LLM tool's context
-
-This prevents interleaving. An arriving actor reads only its own history and picks up where it left off.
-
-## Team-level view
-
-A team is an actor that belongs to itself. The team gets:
-
-1. **A graph** (in `gdd.graphs`) whose members are the `session-context-*` intents of all actors on the team
-2. **Its own session-context intent** (`session-context-team-{project}`) added as a member of its own graph
-
-The team's bookmark records project-level milestones — not individual session context. It aggregates.
-
-Querying the team graph gives the full picture:
-
-- The team's own bookmark: where the project stands
-- Each actor's bookmark: what each individual is doing
-
-Adding an actor to the team:
+This returns the non-superseded node(s). Take the returned node's ID and project from it:
 
 ```
-POST /api/intents  { id: "session-context-{new-actor}", ... }
-POST /api/graphs/add-node  { graph_id: "team-{project}", node_id: "session-context-{new-actor}" }
+GET /api/projection/{id}/llm
 ```
 
-## Creating the session-context intent
+The response contains the current bookmark intent, its expression (the last session's summary), and any gaps or decisions in the neighborhood. The actor reads the expression's artifacts and is oriented.
 
-When an actor first connects and no `session-context-{actor-id}` exists, create one:
+### Multiple tips
+
+If `/api/current` returns more than one node, previous sessions exited abnormally (no supersede edge was written). This is honest, not broken — it means multiple sessions ran without cleanly handing off. The arriving LLM reconciles the tips: read each projection, merge the context, then create a single new intent that supersedes all of them.
+
+## Session end routine
+
+At session end, the actor:
+
+1. Notes the current tip's ID (from startup)
+2. Creates a new intent with a timestamped ID:
 
 ```
 POST /api/intents
 {
-  "id": "session-context-{actor-id}",
+  "id": "session-context-{actor-id}-{timestamp}",
   "type": "implement-operation",
-  "name": "Session continuity for {actor-id} actor",
-  "description": "An arriving {actor-id} instance projects from this intent to recover its working context. Scoped to one actor to support multi-developer workflows.",
+  "name": "Session continuity for {actor-id} — {date}",
+  "description": "Bookmark for {actor-id} session on {date}. Supersedes previous bookmark.",
   "test_condition": "{actor-id} projecting from this node can state current project status, identify next task, and list open questions without reading any other source."
 }
 ```
 
-## Recording a session bookmark
-
-At session end:
+3. Records an expression on the new intent:
 
 ```
 POST /api/expressions
 {
   "name": "Session {date}: {headline}",
   "description": "{narrative of what happened}",
-  "intent_ids": ["session-context-{actor-id}"],
+  "intent_ids": ["session-context-{actor-id}-{timestamp}"],
   "artifacts": {
     "actor": "{actor-id}",
     "session_date": "{date}",
@@ -101,6 +65,62 @@ POST /api/expressions
 }
 ```
 
+4. Supersedes the previous tip:
+
+```
+POST /api/supersede
+{
+  "old_id": "{previous-tip-id}",
+  "new_id": "session-context-{actor-id}-{timestamp}"
+}
+```
+
+After supersession, `/api/current?pattern=session-context-{actor-id}` returns only the new node.
+
+## Per-actor scoping
+
+Session context is scoped per actor, not shared. Each actor maintains its own supersede chain:
+
+- `session-context-claude-code` → `session-context-claude-code-20260429T1430` → ...
+- `session-context-ken` → `session-context-ken-20260429T1500` → ...
+
+This prevents interleaving. An arriving actor reads only its own chain tip.
+
+## Creating the initial session-context intent
+
+When an actor first connects and `/api/current?pattern=session-context-{actor-id}` returns empty, create the root:
+
+```
+POST /api/intents
+{
+  "id": "session-context-{actor-id}",
+  "type": "implement-operation",
+  "name": "Session continuity for {actor-id} actor",
+  "description": "An arriving {actor-id} instance projects from this intent to recover its working context.",
+  "test_condition": "{actor-id} projecting from this node can state current project status, identify next task, and list open questions without reading any other source."
+}
+```
+
+This becomes the first tip. The first session end will create a timestamped successor and supersede it.
+
+## Team-level view
+
+A team gets a graph (in `gdd.graphs`) whose members are the `session-context-*` chain tips of all actors on the team, plus the team's own `session-context-team-{project}` bookmark.
+
+Querying the team graph gives the full picture: where the project stands and what each individual is doing.
+
 ## No new machinery
 
-This mechanism uses only existing graph primitives — intents, expressions, satisfies edges, graphs, graph memberships. No new node types, no special tables, no session containers. The graph already knows how to do this.
+This mechanism uses only existing graph primitives — intents, expressions, satisfies edges, supersedes edges, graphs. No new node types, no special tables. The graph already knows how to do this.
+
+## Working-intent tracking
+
+A simpler complement to the session bookmark pattern: file-based state tracking for the current focus within a session.
+
+Three MCP tools manage a "working intent" -- the intent the actor is currently focused on:
+
+- **`select_working_intent`** — sets the current focus to a specific intent ID. Writes to a JSON file on disk.
+- **`get_working_intent`** — reads the current focus. Returns the intent ID or null if none is set.
+- **`clear_working_intent`** — removes the current focus.
+
+This is not graph state -- it is ephemeral session state stored in a local file. It answers the narrower question "what am I working on right now?" rather than the broader question the session bookmark answers ("what is the full context of my ongoing work?"). The two mechanisms coexist: the working intent tracks intra-session focus, the session bookmark tracks inter-session continuity.

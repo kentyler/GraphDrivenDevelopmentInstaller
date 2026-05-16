@@ -24,13 +24,13 @@ The SDK handles protocol negotiation. The builder chooses the exact wiring based
 
 ## Tools
 
-Most MCP tools map directly to existing graph operations. Some — like `ask` (composes intent construction with expression recording) and `configure_provider` (infrastructure configuration) — compose multiple operations or expose capabilities not separately named in the graph layer.
+Most MCP tools map directly to existing graph operations. Some — like `ask` (composes intent construction with expression recording) and `configure_provider` (infrastructure configuration) — compose multiple operations or expose capabilities not separately named in the graph layer. Board tools, edge node tools, and working-intent tools extend the core graph with board-based inquiry, edge phenomena tracking, and session focus management.
 
 ### ask
 
 Natural language entry point. The user says something; the LLM constructs the intent (name, type, test condition, expression) and satisfies it in the same session. Returns the result to the caller.
 
-- **Input**: `{ text: string }` — the natural language ask
+- **Input**: `{ input: string, client_id?: string, context_intent_id?: string }` — the natural language ask; client_id identifies the caller; context_intent_id scopes the ask to a specific intent's projection
 - **Maps to**: `clientSession` / `translateRepresentation` + intent creation + expression recording
 - **Requires**: Active LLM provider configured
 
@@ -38,7 +38,7 @@ Natural language entry point. The user says something; the LLM constructs the in
 
 What's red. Returns intents and gaps with no incoming satisfies edges (excluding expression, decision, and signal nodes). Supports a workable filter to return only red intents whose dependencies are all green.
 
-- **Input**: `{ workable?: boolean }` — when true, returns only red intents whose blocked-by dependencies all have incoming satisfies edges
+- **Input**: `{ workable?: boolean, graph_id?: string }` — when workable is true, returns only red intents whose blocked-by dependencies all have incoming satisfies edges; graph_id scopes the query to nodes within that graph's memberships
 - **Maps to**: `queryIncomplete`
 
 ### query_skills
@@ -59,14 +59,14 @@ Full context for a given intent — dependencies, test condition, expression nod
 
 Direct graph operation for actors who speak graph. Handles all node types -- intent types require test_condition, gap/decision/signal nodes require notes, expression nodes require artifacts.
 
-- **Input**: `{ name, type, description, test_condition?, test_verification?, blocked_by?: string[], notes?: string, artifacts?: object }`
+- **Input**: `{ id: string, type: string, name: string, description?: string, test_condition?: string, test_verification?: string, blocked_by?: string }` — blocked_by is a comma-separated string of node IDs (parsed to array server-side)
 - **Maps to**: `createIntent`
 
 ### record_expression
 
 Record work done against one or more intents. Creates an expression node and satisfies edges linking it to the specified intents.
 
-- **Input**: `{ intent_ids: string[], artifacts: object, name: string, description?: string }`
+- **Input**: `{ name: string, artifacts: string, intent_ids?: string, description?: string }` — intent_ids is a comma-separated string of node IDs (parsed to array server-side); artifacts is a JSON string (parsed server-side). intent_ids is optional — an expression recorded without intent_ids is "unlinked" and can be claimed later via `link_expression`.
 - **Maps to**: `recordExpression`
 
 ### link_expression
@@ -80,7 +80,7 @@ Link an existing expression node to an additional intent it also satisfies.
 
 Create a named graph for organizing nodes.
 
-- **Input**: `{ id: string, name: string, owner: string }`
+- **Input**: `{ id: string, name: string, owner?: string }`
 - **Maps to**: `createGraph`
 
 ### add_node_to_graph
@@ -115,14 +115,14 @@ List all graphs a node belongs to.
 
 Pull the andon cord.
 
-- **Input**: `{ name, notes, blocked_by?: string[] }`
+- **Input**: `{ name: string, notes: string, id?: string }`
 - **Maps to**: `createGap`
 
 ### create_decision
 
 Record what was chosen, alternatives considered, and scope governed. Optionally closes one or more gaps.
 
-- **Input**: `{ name: string, description: string, notes: string, closes?: string[] }` — closes is an array of gap IDs; creates `closes` edges from the decision to each gap
+- **Input**: `{ name: string, notes: string, description?: string, closes?: string, id?: string }` — closes is a comma-separated string of gap IDs (parsed to array server-side); creates `closes` edges from the decision to each gap
 - **Maps to**: `createDecision`
 
 ### supersede_intent
@@ -136,15 +136,148 @@ Replace an old intent with a new one. The old intent remains in the graph as his
 
 What agents exist and their status.
 
-- **Input**: `{ status?: string }`
+- **Input**: `{ status?: string, intent_id?: string }` — intent_id filters to agents whose scope includes the given intent
 - **Maps to**: `queryAgents`
 
 ### configure_provider
 
-Add, update, remove, or set the active LLM provider.
+List, add, or activate an LLM provider.
 
-- **Input**: `{ action: "add" | "update" | "remove" | "set_active" | "list", provider?: string, api_key?: string, model?: string, id?: string }`
-- **Maps to**: CRUD on `gdd.llm_providers` via `/api/settings/llm`
+- **Input**: `{ action: "list" | "add" | "activate", name?: string, provider?: string, api_key?: string, model?: string, id?: string }` — `list` returns all providers; `add` creates a new provider (requires name, provider, api_key, model); `activate` sets a provider as active by id (deactivates all others first)
+- **Maps to**: CRUD on `gdd.llm_providers`
+
+### set_test_condition
+
+Add or set the test condition on an existing intent. Test conditions are write-once -- once set, they are immutable. To change a test, supersede the intent.
+
+- **Input**: `{ intent_id: string, test_condition: string, test_verification?: string }`
+- **Maps to**: `setTestCondition`
+
+### query_unlinked
+
+Find expression nodes that have no satisfies edges to any intent. These are "produced but not yet claimed" expressions. Optionally scoped to a board.
+
+- **Input**: `{ board_id?: string }`
+- **Maps to**: `queryUnlinked`
+
+### create_edge
+
+Create an edge between two nodes. Supports all edge types (blocked_by, satisfies, closes, tensions_with, supersedes, informs, refines).
+
+- **Input**: `{ from_node: string, to_node: string, edge_type: string, description?: string, created_by?: string }`
+- **Maps to**: `createEdge`
+
+### supersede_edge
+
+Replace an existing edge with a new one. The old edge remains in the graph as history. Any field not provided is carried forward from the old edge.
+
+- **Input**: `{ old_edge_id: string, from_node?: string, to_node?: string, edge_type?: string, description?: string, created_by?: string }`
+- **Maps to**: `supersedeEdge`
+
+### create_board
+
+Create a board -- a container for tension readings and edge nodes. Boards organize ongoing inquiry around a focal question or domain.
+
+- **Input**: `{ id: string, name: string, statement?: string, created_by?: string }`
+- **Maps to**: `createBoard`
+
+### query_boards
+
+List boards, optionally filtered by status.
+
+- **Input**: `{ status?: string }`
+- **Maps to**: `queryBoards`
+
+### get_board
+
+Full context for a board -- its details, tension readings, assigned nodes, and edge nodes.
+
+- **Input**: `{ board_id: string }`
+- **Maps to**: `getBoard`
+
+### record_tension_reading
+
+Record a tension signal on a board. Tension readings are observations of friction, surprise, or dissonance. They accumulate on the board and inform edge node creation.
+
+- **Input**: `{ board_id: string, signal: string, read_by?: string, edge_node_id?: string, tension_character?: string }`
+- **Maps to**: `recordTensionReading`
+
+### assign_node_to_board
+
+Assign an existing graph node (intent, gap, decision, etc.) to a board.
+
+- **Input**: `{ node_id: string, board_id: string }`
+- **Maps to**: `assignNodeToBoard`
+
+### query_board_axioms
+
+List axiom nodes belonging to a board (excluding superseded axioms).
+
+- **Input**: `{ board_id: string }`
+- **Maps to**: `SELECT` on `gdd.nodes` filtered by type 'axiom' and board_id, excluding superseded
+
+### create_edge_node
+
+Create an edge node -- a node representing something that resists clean articulation. Edge nodes live on a board and can relate to other graph nodes.
+
+- **Input**: `{ name: string, board_id: string, id?: string, content?: string, related_nodes?: string, weight?: number, created_by?: string }` — related_nodes is a comma-separated string of node IDs (parsed to array server-side)
+- **Maps to**: `createEdgeNode`
+
+### query_edge_nodes
+
+List edge nodes, optionally filtered by board or status.
+
+- **Input**: `{ board_id?: string, status?: string }`
+- **Maps to**: `queryEdgeNodes`
+
+### get_edge_node
+
+Full context for an edge node -- its details, sensitivity readings, and related nodes.
+
+- **Input**: `{ id: string }`
+- **Maps to**: `getEdgeNode`
+
+### record_sensitivity_reading
+
+Record a sensitivity signal on an edge node. Sensitivity readings track how the edge node responds to changes or interactions elsewhere in the graph.
+
+- **Input**: `{ edge_node_id: string, signal: string, read_by?: string, board_impact?: string }`
+- **Maps to**: `recordSensitivityReading`
+
+### convert_gap_to_edge
+
+Convert an existing gap node into an edge node. The gap remains in the graph; a new edge node is created on the specified board with the gap's context carried forward. Use when a gap resists resolution and the team recognizes it as a persistent edge phenomenon rather than a solvable problem.
+
+- **Input**: `{ gap_id: string, board_id: string, content?: string, description?: string, failed_articulation_attempts?: string, created_by?: string }` — failed_articulation_attempts is a pipe-separated string (parsed to array server-side)
+- **Maps to**: `convertGapToEdge`
+
+### expand_edge_node
+
+Expand an edge node by creating a new gap that represents a specific facet of the edge's resistance. The gap is linked to the edge node. Use when an edge node's tension becomes partially articulable.
+
+- **Input**: `{ edge_node_id: string, gap_name: string, gap_notes: string, description?: string, created_by?: string }`
+- **Maps to**: `expandEdgeNode`
+
+### select_working_intent
+
+Set the working intent(s) for the current session. Writes a file at `~/.claude/hooks/gdd-working-intent.json` that hooks and other tools can read to know what the actor is currently working on. Validates that all specified intents exist in the graph.
+
+- **Input**: `{ intent_ids: string, graph_id?: string }` — intent_ids is a comma-separated string of node IDs
+- **Maps to**: file write + validation query
+
+### clear_working_intent
+
+Clear the current working intent. Removes the working-intent file.
+
+- **Input**: `{}` (no parameters)
+- **Maps to**: file delete
+
+### get_working_intent
+
+Read the current working intent. Returns the intent IDs, names, types, graph scope, and selection timestamp.
+
+- **Input**: `{}` (no parameters)
+- **Maps to**: file read
 
 ## Connecting from external tools
 

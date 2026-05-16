@@ -73,7 +73,7 @@ Its test condition is structural: all children are green — the schema exists, 
 
 An intent graph has two structural elements:
 
-1. **Nodes** — six kinds: intents (what needs to exist), compose (structural grouping), gaps (detected blockers), decisions (authored closures), signals (external events), and expressions (concrete artifacts produced). See Intent Types below for the full vocabulary.
+1. **Nodes** — seven kinds: intents (what needs to exist), compose (structural grouping), gaps (detected blockers), decisions (authored closures), signals (external events), expressions (concrete artifacts produced), and axioms (board-level constraints). See Intent Types below for the full vocabulary.
 2. **Edges** — seven types of directed relationships between nodes: dependency (`blocked-by`), composition (`contains`), tension (`tensions-with`), refinement (`refines`), supersession (`supersedes`), resolution (`closes`), and satisfaction (`satisfies`). See Edge Types below.
 
 Intents carry test conditions — the verifiable claim of what must be true when the intent is satisfied. Expressions are nodes connected to intents via `satisfies` edges — one expression can satisfy multiple intents, and one intent can be satisfied by multiple expressions.
@@ -91,11 +91,12 @@ Every intent node has these fields:
   "name": "string -- human-readable short name",
   "description": "string -- what this intent means and why it matters",
   "test": {
-    "condition": "string -- REQUIRED for all intent types except gap, signal, expression, and compose. The verifiable claim: what must be true for this intent to be satisfied. Gap nodes have no test condition (the test is not yet articulable). Signal nodes have no test condition (the event already happened -- there is nothing to verify). Expression nodes have no test condition (they are artifacts, not requirements). Compose nodes have a structural test: all contains children are satisfied.",
+    "condition": "string -- optional for intent types, write-once. When present, it is the verifiable claim: what must be true for this intent to be satisfied. When absent, the intent is 'untested' or 'uncollapsed' -- it opens a possibility space that has not yet been made evaluable. An untested intent cannot turn green until a test is added via setTestCondition. Once set, test_condition is immutable -- to change a test, supersede the intent. This enforces legibility: every LLM session can see the exact test that was in effect when an expression was recorded, because it never changes. Gap nodes have no test condition (the test is not yet articulable). Signal nodes have no test condition (the event already happened -- there is nothing to verify). Expression nodes have no test condition (they are artifacts, not requirements). Axiom nodes have no test condition (they are hypotheses, not requirements). Compose nodes have a structural test: all contains children are satisfied.",
     "verification": "string -- how to check (query, assertion, inspection)"
   },
   "artifacts": "JSONB -- nullable. Only used by expression nodes. The concrete output: files created/modified, schema changes, configuration produced.",
-  "notes": "string -- optional for intents, REQUIRED for gaps and decisions. Context, reasoning, alternatives considered."
+  "notes": "string -- optional for intents, REQUIRED for gaps, decisions, and axioms. Context, reasoning, alternatives considered.",
+  "board_id": "TEXT REFERENCES gdd.boards(id) -- nullable. Associates the node with a board. REQUIRED for axiom nodes."
 }
 ```
 
@@ -121,16 +122,20 @@ When writing test conditions, prefer tier A where possible. Use tier B for struc
 
 The graph is a test suite. Each intent is a test:
 
-- **Red**: Intent exists, no satisfies edge pointing to it
+- **Red**: Intent exists, no satisfies edge pointing to it. This includes both tested intents (have test_condition, need an expression) and untested intents (need a test before they can be satisfied).
 - **Green**: Intent exists, at least one satisfies edge pointing to it (from an expression node)
+
+An untested intent is permanently red until a test condition is added. The projection surfaces `has_test: false` so actors can distinguish "needs work" from "needs a test first."
 
 "What to do next" = "what's red." The same red-green cycle as TDD, lifted to the intent graph.
 
 There is no status column on the node. Red/green is derived by checking for a `satisfies` edge pointing to the intent (`EXISTS (SELECT 1 FROM gdd.edges WHERE to_node = node.id AND edge_type = 'satisfies')`). An intent with no incoming `satisfies` edge is red. An intent with at least one incoming `satisfies` edge is green. A superseded node (one with an incoming `supersedes` edge) is never green, regardless of its `satisfies` edges — this causes downstream dependents to turn red naturally through the existing `blocked-by` traversal, with no cascade logic required. A `compose` intent is green when all its `contains` children are green. Expression nodes are neither red nor green -- they are artifacts, not requirements.
 
-Whether a red intent is workable right now is a structural question answered by traversing its `blocked-by` edges — if all dependencies are green, the intent is workable. This is a query result, not a stored state.
+Whether a red intent is workable right now is a structural question answered by traversing its `blocked-by` edges -- if all dependencies are green, the intent is workable. This is a query result, not a stored state.
 
 The test condition is verified by the actor before recording the expression. The discipline is at recording time — the actor checks that the test passes, then records the expression. The graph does not continuously re-evaluate tests. There is no "suspended" — intents that are no longer intended are superseded by new intents via `supersedes` edges. The old intent remains in the graph as history; current intent is derived from supersession structure.
+
+Test conditions are write-once. An untested intent can receive a test via `setTestCondition`, but once set, the test is immutable. To change a test, supersede the intent — create a new intent with the revised test and a `supersedes` edge to the old one. This enforces the graph's write-only semantics at the test level: every expression in the graph was recorded against the test that is still visible on the intent. No silent mutation, no lost history.
 
 ## Intent Types
 
@@ -234,7 +239,9 @@ Expression node structure:
 
 An expression is not an intent -- it has no test condition because it is the artifact, not the requirement. It is not a gap -- no blocker is being surfaced. It is the graph's record of work done. Expression nodes connect to intents via `satisfies` edges (expression -> intent). One expression can satisfy multiple intents (shared implementation). One intent can be satisfied by multiple expressions (independent contributions). The `satisfies` edge is what turns intents green -- an intent with at least one incoming `satisfies` edge has been expressed.
 
-Expression nodes are neither red nor green. They are artifacts, not requirements. They do not appear in `queryIncomplete` results. Their role is purely structural: they connect to intents via `satisfies` edges, and those edges determine which intents are green.
+An expression can also exist without any `satisfies` edges -- an "unlinked" expression. This records production without claiming satisfaction: "I built this, but I'm not yet asserting which intents it satisfies." The LLM links it later via `linkExpression` when it has enough understanding to make that claim. Unlinked expressions are queryable via `GET /api/unlinked` (or `query_unlinked` MCP tool).
+
+Expression nodes are neither red nor green. They are artifacts, not requirements. They do not appear in `queryIncomplete` results (along with compose, decision, signal, and axiom nodes). Their role is purely structural: they connect to intents via `satisfies` edges, and those edges determine which intents are green.
 
 ### Signal type
 
@@ -258,9 +265,31 @@ A signal is not an intent -- it has no test condition because the event already 
 
 Signals separate reception from interpretation. The event arrives and is recorded faithfully before any LLM reasons about its implications. This means the raw event is never lost to a failed or partial transduction -- the signal persists, and transduction can be retried or refined against it.
 
+### Axiom type
+
+| Type | Meaning | Key fields |
+|------|---------|------------|
+| `axiom` | A board-level constraint -- a hypothesis about the shape of the problem space. Supersedable like any other node. | `name`, `notes` (REQUIRED -- the axiom statement), `board_id` (REQUIRED) |
+
+Axiom node structure:
+
+```json
+{
+  "id": "string -- unique identifier",
+  "type": "axiom",
+  "name": "string -- short description of the constraint",
+  "notes": "string -- REQUIRED. The axiom statement: what this board takes as given, and why.",
+  "board_id": "string -- REQUIRED. The board this axiom constrains."
+}
+```
+
+An axiom is not an intent -- it has no test condition because it is a hypothesis, not a requirement to verify. It is a board-level constraint: a claim about the shape of the problem space that the board operates within. Board boundaries are derived from axioms, not proclaimed -- the set of current (non-superseded) axioms on a board defines what the board takes as given. Axioms are supersedable like any other node: when understanding changes, create a new axiom with a `supersedes` edge to the old one. The old axiom remains in the graph as history.
+
+Axiom nodes are neither red nor green. They do not appear in `queryIncomplete` results. Their role is to provide context to actors working within a board -- `buildProjection` includes the board's current axioms when the vantage node has a `board_id`.
+
 ## Edge Types
 
-Edges connect nodes. Every edge has a `type` and a direction (from -> to).
+Edges connect nodes. Every edge has a `type` and a direction (from -> to). Edges also carry optional `description` (rationale for why this relationship exists) and `created_by` (provenance). Edges are supersedable: when an edge is wrong, create a replacement edge and set `superseded_by` on the old one via `supersedeEdge`. Superseded edges remain in the graph as history; current edges are those where `superseded_by IS NULL`. Projections automatically filter out superseded edges.
 
 | Edge type | Meaning | Direction | Example |
 |-----------|---------|-----------|---------|
@@ -291,7 +320,7 @@ An intent without an expression is red. An intent with an expression whose test 
 
 ### The andon cord
 
-If any actor — human, LLM agent, or client — discovers a blocker or cannot articulate a test condition, do not create an intent. Create a gap node instead. Record everything you do know in the gap's `notes` field. The gap is not an admission of total ignorance — it is the boundary between what is articulable and what is not, with the articulable part preserved. Gaps surface to humans through the human-legible representation.
+If any actor — human, LLM agent, or client — discovers a blocker or cannot articulate a test condition, there are two options: create an untested intent (when you know what needs to exist but not what done looks like) or create a gap node (when the blocker is more fundamental -- you can't even name the intent). Record everything you do know in the gap's `notes` field. The gap is not an admission of total ignorance — it is the boundary between what is articulable and what is not, with the articulable part preserved. Gaps surface to humans through the human-legible representation.
 
 When the blocker is resolved, create a decision node recording what was chosen, what alternatives were considered, and what scope is governed. A `closes` edge from the decision to the gap marks the resolution. Then satisfy the gap: create an expression node whose artifacts reference the decision, with a `satisfies` edge to the gap. The gap turns green through the normal mechanism -- it was genuinely satisfied because the blocker was surfaced, a decision was made, and the resolution is recorded. The expression is not a bypass; it is the real artifact of resolving the gap.
 
@@ -299,7 +328,7 @@ The full gap lifecycle: gap created (blocker detected) -> decision created with 
 
 Gaps are detected blockers. Decisions are authored closures.
 
-Intents are commitments (test defined). Gaps are detected blockers (test not possible yet, but partial knowledge preserved). Decisions are authored closures (records what was chosen and why). Signals are environmental events (the thing already happened -- recorded faithfully before interpretation).
+Intents are commitments (test defined). Gaps are detected blockers (test not possible yet, but partial knowledge preserved). Decisions are authored closures (records what was chosen and why). Signals are environmental events (the thing already happened -- recorded faithfully before interpretation). Axioms are board-level constraints (hypotheses about the shape of the problem space -- supersedable like any other node).
 
 ### Superseding intents
 
@@ -355,10 +384,10 @@ A sound sequence. **Each step has a gate — do not proceed to the next step unt
 
 1. **Schema only.** Create all tables, enums, constraints. Verify with manual inserts.
    — GATE: every table exists, every enum is queryable, FK constraints hold. Do not write operations yet.
-2. **Core graph writes.** `createIntent`, `recordExpression` (creates expression node + satisfies edges), `createGap`, `createDecision`, `createEdge`. Verify DB state after each call.
-   — GATE: each operation inserts correct rows, edges reference valid nodes, expression nodes carry artifacts. Do not build reads yet.
+2. **Core graph writes.** `createIntent` (test_condition optional), `recordExpression` (creates expression node + optional satisfies edges), `createGap`, `createDecision`, `createEdge`. Verify DB state after each call.
+   — GATE: each operation inserts correct rows, edges reference valid nodes, expression nodes carry artifacts. Untested intents and unlinked expressions are valid states. Do not build reads yet.
 3. **Core graph reads.** `queryIncomplete`, `buildProjection`, `traverseDependencies`. Test against small hand-built graph fixtures.
-   — GATE: queryIncomplete returns only red, non-superseded intents. buildProjection returns correct dependency subgraph. traverseDependencies walks edges in both directions. Do not expose HTTP yet.
+   — GATE: queryIncomplete returns only red, non-superseded intents (excluding compose, expression, decision, signal, axiom). buildProjection returns correct dependency subgraph and includes board context (board, axioms, edge nodes) when the vantage node has a board_id. traverseDependencies walks edges in both directions. Do not expose HTTP yet.
 4. **HTTP admin surface.** Expose stable endpoints for the above. No MCP yet.
    — GATE: every operation is callable via REST and returns correct results. Do not add LLM operations yet.
 5. **Provider resolution.** Implement `gdd.llm_providers`. Prove both "no active provider" (501) and "active provider exists" paths.
@@ -424,8 +453,8 @@ When populating a new intent graph for a project:
 
 1. **Start with what must exist first.** Schema, core types, foundational operations. These have no `blocked-by` edges -- they're the roots.
 2. **Work outward through dependencies.** Each intent should reference what it's blocked by. The dependency chain should be explicit, not implied.
-3. **Write test conditions concretely.** "The table exists and has the right columns" is better than "schema is done." "The endpoint returns a projection given an intent ID" is better than "projections work."
-4. **Don't create expression nodes yet.** Expression nodes and their `satisfies` edges are created when the intent is satisfied -- when code is written, tables are created, endpoints are tested.
+3. **Write test conditions when you can.** "The table exists and has the right columns" is better than "schema is done." "The endpoint returns a projection given an intent ID" is better than "projections work." If you can't yet articulate a test condition, create the intent without one -- it will show as untested in projections, signaling that evaluability is itself unresolved.
+4. **Don't create expression nodes yet.** Expression nodes and their `satisfies` edges are created when the intent is satisfied -- when code is written, tables are created, endpoints are tested. (Expressions can also be recorded without linking to intents -- use this when you've produced something but don't yet know which intents it satisfies.)
 5. **Use gap for genuine decisions.** If you don't know which approach to take, create a gap intent with the question and options. Don't guess -- surface the decision.
 6. **Don't over-decompose.** An intent should be large enough to be meaningful and small enough to have a clear test condition. "Build the whole system" is too large. "Add a column" is too small unless it's genuinely a separate concern.
 
@@ -433,7 +462,7 @@ When populating a new intent graph for a project:
 
 The self-hosting claim requires a concrete bootstrap sequence. The system must exist before it can track its own construction, so the first few steps are privileged — they happen outside the normal graph mechanism.
 
-1. **Create schema and tables.** Build the `gdd` schema and all Layer 0 tables (`gdd.nodes`, `gdd.edges`, `gdd.graphs`, `gdd.graph_memberships`, `gdd.agents`, `gdd.skills`, `gdd.llm_providers`) plus enums. This is raw DDL.
+1. **Create schema and tables.** Build the `gdd` schema and all Layer 0 tables (`gdd.nodes`, `gdd.edges`, `gdd.graphs`, `gdd.graph_memberships`, `gdd.agents`, `gdd.skills`, `gdd.llm_providers`, `gdd.boards`, `gdd.edge_nodes`, `gdd.sensitivity_readings`, `gdd.tension_readings`) plus enums. This is raw DDL.
 
 2. **Insert root intent.** Insert the `gdd-root` node directly into `gdd.nodes`. This is the axiomatic ground — it exists before the graph operations do.
 
@@ -447,7 +476,7 @@ The self-hosting claim requires a concrete bootstrap sequence. The system must e
 
 Any actor — human, LLM agent, client, or external force — follows the same protocol. The loop is the loop.
 
-1. **Find what's red.** Run `queryIncomplete` — it returns all intents and gaps that have no incoming satisfies edge (red) and are current (not superseded). Expression, decision, and signal nodes are excluded. Start with the one that unblocks the most downstream work.
+1. **Find what's red.** Run `queryIncomplete` -- it returns all intents and gaps that have no incoming satisfies edge (red) and are current (not superseded). Compose, expression, decision, signal, and axiom nodes are excluded. Start with the one that unblocks the most downstream work.
 
 2. **Read the projection.** Before working on an intent, build its projection. This gives you the full context: what it depends on, what it enables, what its test condition requires. For an LLM actor, `renderLLM` produces the dense structured form that makes this context directly navigable.
 

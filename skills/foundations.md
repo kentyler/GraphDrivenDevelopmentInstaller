@@ -18,13 +18,17 @@ The graph exists because context should be structural — encoded in the relatio
 
 The intent graph is not analogous to TDD. It IS TDD, lifted from functions to intents.
 
-In XP, you write the test before the code. The test IS the specification — it says exactly what "done" means. The code only needs to be the simplest thing that makes the test pass. You don't write code without a test, and you don't write a test you can't verify.
+In XP, you write the test before the code. The test IS the specification — it says exactly what "done" means. The code only needs to be the simplest thing that makes the test pass.
 
-The intent graph applies the same discipline at the architecture level. The test condition IS the intent — it says exactly what must be true. The expression only needs to satisfy the test. You don't create an intent without a test condition (that's a gap, not an intent), and you don't write a test condition you can't verify.
+The intent graph applies the same discipline at the architecture level. The test condition IS the intent — it says exactly what must be true. The expression only needs to satisfy the test. An intent cannot turn green without a test condition and a satisfying expression.
 
-Red/green is not a metaphor borrowed from testing. It is the same mechanism. An intent is red when it has a test and no passing expression. It is green when the expression satisfies the test. "What to do next" is "what's red" — exactly as in TDD.
+But the graph also serves as a medium for the LLM's ongoing reasoning, and the LLM does not always arrive with full understanding. An intent can exist before its test is articulable — this is an "untested" or "uncollapsed" intent. It opens a possibility space that has not yet been made evaluable. Similarly, an expression can exist before the LLM knows which intents it satisfies — an "unlinked" expression records production without claiming satisfaction.
 
-This is the deepest design commitment in the system and it precedes everything else. If you understand only one thing about the intent graph, understand this: it is a test suite at the architecture level, and it inherits TDD's discipline — no intent without a test, no expression beyond what the test requires.
+The discipline is preserved: nothing turns green without a test and a passing expression. But recognition, production, test-writing, and satisfaction-claiming are independent reasoning acts that can happen in any order. The graph reflects the LLM's actual epistemic state — what it has recognized, what it has produced, what it can evaluate, and what it has verified — rather than forcing premature certainty.
+
+Red/green is not a metaphor borrowed from testing. It is the same mechanism. An intent is red when no expression satisfies it. It is green when an expression does. An untested intent is red and will stay red until a test is added — the graph honestly represents "I know this needs to exist but I can't yet say what done looks like." "What to do next" is "what's red" — exactly as in TDD.
+
+This is the deepest design commitment in the system and it precedes everything else. If you understand only one thing about the intent graph, understand this: it is a test suite at the architecture level, and it inherits TDD's discipline — no green without a test, no expression beyond what the test requires. The LLM manages the graph autonomously; the human prompts, the LLM structures.
 
 ### The self-hosting proof
 
@@ -123,9 +127,11 @@ No mechanism for graph reset exists yet. When it does, the operation should be: 
 
 "What should I work on next?" is answered by structure, not by scores.
 
-The system deliberately has no tension scores, no priority weights, no urgency signals, no scheduling algorithms. The answer to "what's next" is: what's red? Among red intents, which one unblocks the most downstream work?
+The core graph deliberately has no tension scores on intents, no priority weights, no urgency signals, no scheduling algorithms. The answer to "what's next" is: what's red? Among red intents, which one unblocks the most downstream work?
 
 These are not computed by a scoring function. They are read from the graph. The dependency structure IS the prioritization. The longest chain of red intents is the critical path. The agent scope with the most queued red intents is the constraint. No algorithm produces these — they are visible in the projection.
+
+Tension does exist in the built system, but at the board level, not the intent level. `gdd.tension_readings` records board-level tension -- an observational instrument that captures how much unresolved structural stress a board carries. `gdd.sensitivity_readings` captures edge-node-level signals -- drift or pressure at specific boundary points. Neither assigns scores to individual intents or changes what "what's next" means. They are diagnostic instruments read alongside the graph, not priority inputs fed into it.
 
 When you are building this system, resist adding priority fields, urgency indicators, weight parameters, or sorting heuristics beyond downstream-dependent-count. Every scoring mechanism you add is an attempt to impose external judgment on a system that derives its own ordering from structure.
 
@@ -159,13 +165,19 @@ Oversight happens through the graph. An agent's work is visible as nodes, edges,
 
 ### The andon cord is universal
 
-Any actor — human, agent, client — that discovers a blocker or incompleteness at a specific location must surface it. If the actor cannot articulate a test condition, it must create a gap instead of an intent, recording everything it does know in the gap's notes. The gap IS the incompleteness — no actor attribution metadata is needed because the content carries the perspective.
+Any actor — human, agent, client — that discovers a blocker or incompleteness at a specific location must surface it. If the actor cannot articulate a test condition, it can create an untested intent (when the need is clear but not yet evaluable) or a gap (when the blocker is more fundamental), recording everything it does know in the node's notes or description. The gap IS the incompleteness — no actor attribution metadata is needed because the content carries the perspective.
 
 This applies to more than test articulability. An express-only agent satisfying an intent is making an interpretive choice: the test condition says "users can log in with email" and the agent picks an implementation. If the agent is uncertain — if multiple approaches satisfy the test and the choice between them matters — the right action is to create a gap, not to guess. The andon cord applies to expression confidence, not just test articulability.
 
 The gap is not an admission of failure. It is the boundary between what is articulable and what is not, with the articulable part preserved. A system that never produces gaps is not a system that has no ambiguity — it is a system that is hiding its ambiguity inside silent choices.
 
 Decisions are the counterpart to gaps. A decision is an authored closure — it records what was chosen, what alternatives were considered, and what scope is governed by the choice. A `closes` edge from a decision to a gap marks the gap as resolved. Then an expression node with a `satisfies` edge to the gap turns it green — the expression's artifacts reference the decision, recording that the gap was genuinely resolved. Gaps are detected blockers; decisions are authored resolutions; the expression completes the lifecycle.
+
+### The dark fraction is a design constraint, not a bug
+
+The Dark Fraction Theorem (Itelman & Kowalski, 2026) proves that boundary coherence degrades geometrically with scale. Each shared variable at a system boundary carries three independently driftable facets -- Meaning, Structure, and Context -- and the fraction of configurations that no within-system diagnostic can reach goes to 1 as variables grow. This is not an engineering shortcoming to be solved with better tooling. It is a geometric property of the configuration space. GDD's architecture treats this as a design constraint: gap nodes register the dark fraction where it is encountered, signal nodes capture drift before interpretation, and edge nodes mark boundaries where verification ends. The system does not claim to eliminate unverifiable configurations. It makes them structural rather than invisible.
+
+Edge nodes are now a concrete subsystem, not just conceptual markers. The `gdd.edge_nodes` table stores boundary-point entities with a defined lifecycle: conversion (an external signal is transduced into an edge node at a system boundary) and expansion (an edge node is unpacked into operational graph elements when enough context accumulates to interpret it). Sensitivity readings in `gdd.sensitivity_readings` attach to edge nodes, recording drift signals at the boundaries they mark.
 
 ### The loop is the loop
 
