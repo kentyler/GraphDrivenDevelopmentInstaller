@@ -162,7 +162,7 @@ Find expression nodes that have no satisfies edges to any intent. These are "pro
 
 ### create_edge
 
-Create an edge between two nodes. Supports all edge types (blocked_by, satisfies, closes, tensions_with, supersedes, informs, refines).
+Create an edge between two nodes. Supports all edge types (blocked-by, satisfies, closes, tensions-with, supersedes, contains, refines).
 
 - **Input**: `{ from_node: string, to_node: string, edge_type: string, description?: string, created_by?: string }`
 - **Maps to**: `createEdge`

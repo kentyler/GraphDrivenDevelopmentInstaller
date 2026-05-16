@@ -63,7 +63,7 @@ After creating the schema and tables, insert the root intent — the axiomatic g
   "type": "compose",
   "name": "GDD system exists and is operational",
   "description": "The axiomatic ground of the intent graph. This intent exists before any graph operation creates it. The recursion of self-hosting bottoms out here.",
-  "children": ["foundation-tables", "projection-mechanism", "dual-repr", "actor-integration", "human-surfaces", "mcp-server"]
+  "children": ["system-origins", "foundation-tables", "projection-mechanism", "dual-repr", "actor-integration", "human-surfaces", "mcp-server"]
 }
 ```
 
@@ -316,7 +316,7 @@ Similarly, the **`test`** object in the JSON maps to columns on `gdd.nodes`: `te
 
 The graph does not use tension scores, priority weights, or urgency signals. "What to do next" is determined by a single question: **what's incomplete?**
 
-An intent without an expression is red. An intent with an expression whose test passes is green. The graph is a house -- when you add a room, it's there. When you tear one down, it's gone. There is no planning-state limbo.
+An intent without an expression is red. An intent with an expression whose test passes is green. The graph is write-only -- intents are superseded, never removed. When an intent is superseded, its successor carries the lineage forward. There is no planning-state limbo, and there is no deletion.
 
 ### The andon cord
 

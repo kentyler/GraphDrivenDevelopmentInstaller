@@ -179,6 +179,26 @@ The Dark Fraction Theorem (Itelman & Kowalski, 2026) proves that boundary cohere
 
 Edge nodes are now a concrete subsystem, not just conceptual markers. The `gdd.edge_nodes` table stores boundary-point entities with a defined lifecycle: conversion (an external signal is transduced into an edge node at a system boundary) and expansion (an edge node is unpacked into operational graph elements when enough context accumulates to interpret it). Sensitivity readings in `gdd.sensitivity_readings` attach to edge nodes, recording drift signals at the boundaries they mark.
 
+### Three boundary registers
+
+The graph maintains three registers that together capture its relationship to the unknown. Each is a different kind of boundary, and each is already implemented -- this section names them as a group so they can be reasoned about together.
+
+**Production boundary (unexpressed intents).** Red intents are what the system has recognized but not yet produced. `queryIncomplete` returns this register. It is the work surface -- what remains to be done. Every red intent is an acknowledged gap between recognition and production.
+
+**Governing boundary (axioms).** Axioms on a board are the current best understanding of constraints operating inside that board's scope. They are hypotheses, not laws -- supersedable when understanding changes. The axiom set defines the geometry within which the board's intents are satisfied. Different boards can operate under different axiom sets. Axiom drift (visible through the supersession chain) reveals what each board actually needed versus what was assumed. Query a board's axioms via `query_board_axioms` or `GET /api/boards/:id/axioms`.
+
+**Sensitivity boundary (edge nodes).** Edge nodes mark where the system meets its environment -- the points where external signals enter and where verification ends. `gdd.sensitivity_readings` records drift at these points over time. Edge nodes are not intents to be satisfied; they are persistent observation posts. The `conversion_events` and `expansion_events` tables record their lifecycle.
+
+These three registers are complementary. The production boundary says what is not yet done. The governing boundary says what must remain true while doing it. The sensitivity boundary says where the system's assumptions about its environment might be wrong. Together they bound the system's epistemic state: what it knows it needs, what it believes constrains the work, and where it is watching for surprises.
+
+### Board mitosis
+
+A board starts with a statement (what it is about), an edge statement (what is out of bounds), and a set of axioms (what must remain true inside). Over time, axiom drift or growing tension may reveal that a board is operating under conflicting constraints -- two subsets of its intents need different axiom sets.
+
+When this happens, the board should split. Create two new boards, each inheriting the relevant subset of axioms and intents. The original board is superseded, not deleted. The supersession chain records why the split happened.
+
+Board mitosis is not implemented as an automatic operation. It is a human judgment call, surfaced by rising board-level tension readings or axiom conflicts that cannot be resolved within a single axiom set. The graph provides the diagnostic signals; the human (or a sufficiently trusted agent) makes the split decision and records it as a decision node that closes the tension.
+
 ### The loop is the loop
 
 Every actor runs the same loop:
