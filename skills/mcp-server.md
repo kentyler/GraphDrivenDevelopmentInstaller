@@ -38,7 +38,7 @@ Natural language entry point. The user says something; the LLM constructs the in
 
 What's red. Returns intents and gaps with no incoming satisfies edges (excluding expression, decision, and signal nodes). Supports a workable filter to return only red intents whose dependencies are all green.
 
-- **Input**: `{ workable?: boolean, graph_id?: string }` — when workable is true, returns only red intents whose blocked-by dependencies all have incoming satisfies edges; graph_id scopes the query to nodes within that graph's memberships
+- **Input**: `{ workable?: boolean, graph_id?: string, board_id?: string }` — when workable is true, returns only red intents whose blocked-by dependencies all have incoming satisfies edges; graph_id scopes the query to nodes within that graph's memberships; board_id scopes the query to nodes assigned to that board
 - **Maps to**: `queryIncomplete`
 
 ### query_skills

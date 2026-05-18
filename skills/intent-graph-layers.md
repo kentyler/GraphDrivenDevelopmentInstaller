@@ -21,7 +21,7 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "type": "compose",
     "name": "Graph foundation tables",
     "description": "The database tables that store the global intent graph.",
-    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status", "table-boards", "table-edge-nodes", "table-sensitivity-readings", "table-tension-readings", "type-edge-node-status", "type-board-status", "type-board-impact", "type-tension-character"]
+    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status", "table-boards", "table-edge-nodes", "table-sensitivity-readings", "table-tension-readings", "table-expansion-events", "table-conversion-events", "type-edge-node-status", "type-board-status", "type-board-impact", "type-tension-character"]
   },
   {
     "id": "table-nodes",
@@ -190,6 +190,30 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "test": {
       "condition": "Table gdd.tension_readings exists with columns: id, board_id, read_at, read_by, signal, edge_node_id, tension_character.",
       "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='tension_readings'"
+    }
+  },
+  {
+    "id": "table-expansion-events",
+    "type": "define-table",
+    "name": "Expansion events table",
+    "description": "Records when an edge node is expanded into a gap -- the boundary becomes interior work. Links the edge node to the new gap node with a description of why expansion occurred.",
+    "table_name": "gdd.expansion_events",
+    "blocked_by": ["table-edge-nodes"],
+    "test": {
+      "condition": "Table gdd.expansion_events exists with columns: id (text PK, default gen_random_uuid), edge_node_id (text FK to gdd.edge_nodes, NOT NULL), occurred_at (timestamp, default NOW()), description (text), new_gap_node_id (text FK to gdd.nodes).",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='expansion_events'"
+    }
+  },
+  {
+    "id": "table-conversion-events",
+    "type": "define-table",
+    "name": "Conversion events table",
+    "description": "Records when a gap is converted into an edge node -- an interior question becomes a boundary marker. Links the edge node to the original gap and records failed articulation attempts.",
+    "table_name": "gdd.conversion_events",
+    "blocked_by": ["table-edge-nodes"],
+    "test": {
+      "condition": "Table gdd.conversion_events exists with columns: id (text PK, default gen_random_uuid), edge_node_id (text FK to gdd.edge_nodes, NOT NULL), occurred_at (timestamp, default NOW()), description (text), original_gap_node_id (text FK to gdd.nodes), failed_articulation_attempts (TEXT[]).",
+      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='conversion_events'"
     }
   },
   {
@@ -1006,7 +1030,7 @@ The MCP server makes the graph reachable from external tools. It runs inside the
     "operation_name": "registerMcpTools",
     "blocked_by": ["mcp-endpoint", "op-query-incomplete", "op-query-skills", "op-query-unlinked", "op-build-projection", "op-create-intent", "op-record-expression", "op-link-expression", "op-set-test-condition", "op-create-gap", "op-client-intake", "op-query-agents", "op-create-decision", "op-supersede", "op-supersede-edge", "op-create-graph", "op-add-node-to-graph", "op-remove-node-from-graph", "op-query-graph-nodes", "op-node-graphs", "table-llm-providers"],
     "test": {
-      "condition": "All core MCP tools are registered and callable. The ask tool creates an intent and returns a result. The query_incomplete tool returns red intents. The record_expression tool creates expression nodes with satisfies edges. The link_expression tool adds satisfies edges to existing expressions. The set_test_condition tool sets test conditions on untested intents. The query_unlinked tool returns unlinked expressions. The configure_provider tool can list and set active providers. The create_decision tool creates decisions. The supersede_intent tool creates supersession edges. The graph tools (create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs) manage graph memberships. Each tool produces the same result as calling the equivalent REST endpoint.",
+      "condition": "All core MCP tools are registered and callable. The ask tool creates an intent and returns a result. The query_incomplete tool returns red intents and supports workable, graph_id, and board_id parameters. The record_expression tool creates expression nodes with satisfies edges. The link_expression tool adds satisfies edges to existing expressions. The set_test_condition tool sets test conditions on untested intents. The query_unlinked tool returns unlinked expressions. The configure_provider tool can list and set active providers. The create_decision tool creates decisions. The supersede_intent tool creates supersession edges. The graph tools (create_graph, add_node_to_graph, remove_node_from_graph, query_graph_nodes, node_graphs) manage graph memberships. Each tool produces the same result as calling the equivalent REST endpoint.",
       "verification": "Call each MCP tool through an MCP client and verify results match the equivalent REST API calls."
     }
   },
@@ -1100,6 +1124,8 @@ table-boards                                                    ->  (blocked-by)
 table-edge-nodes                                                ->  (blocked-by)    ->  table-boards
 table-sensitivity-readings                                      ->  (blocked-by)    ->  table-edge-nodes
 table-tension-readings                                          ->  (blocked-by)    ->  table-boards
+table-expansion-events                                          ->  (blocked-by)    ->  table-edge-nodes
+table-conversion-events                                         ->  (blocked-by)    ->  table-edge-nodes
 type-edge-node-status, type-board-status, type-board-impact, type-tension-character  ->  (blocked-by)  ->  foundation-tables
 op-build-projection                                             ->  (contained by)  ->  projection-mechanism
 op-render-human, op-render-llm, op-translate-repr               ->  (contained by)  ->  dual-repr
