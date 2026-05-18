@@ -6,7 +6,17 @@ Graph-Driven Development. The intent graph is the source of truth for this proje
 
 **Build in a separate directory.** This folder contains the skill files — the instructions. Do not write build output (source code, package.json, node_modules, etc.) here. Create a new sibling directory called `GDD` and build there. This folder should remain read-only reference material.
 
-If the `gdd` database doesn't exist yet, start with `skills/foundations.md` — it describes the stances that shape the system's design. Then read `skills/intent-graph.md` (model/spec) and `skills/intent-graph-layers.md` (layer definitions) and build what they describe. Follow the prerequisites section to set up PostgreSQL, then implement all layers in the `GDD` directory.
+If the `gdd` database doesn't exist yet:
+
+1. Read `skills/foundations.md` for design philosophy (reference, not build instructions)
+2. Read `skills/intent-graph.md` for vocabulary and conventions (reference, not build instructions)
+3. Follow the prerequisites section in `skills/intent-graph.md` to set up PostgreSQL
+4. Run bootstrap: creates schema, enums, tables, populates intents with `build_instructions`, creates the `gdd-system` graph
+5. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
+6. For each workable intent, read its `build_instructions` from the projection and build it
+7. `recordExpression` when done, repeat until all intents in `gdd-system` are green
+
+The build sequence comes from the graph -- each intent carries its own `build_instructions` field describing what to create. The skill files are reference material for vocabulary, conventions, and design rationale.
 
 After the system is built, ask the user: **"Do you have an API key for an LLM provider (Anthropic, OpenAI, Google)?"** If yes, add it via the `/api/settings/llm` endpoint or the `configure_provider` MCP tool. Multiple providers can be configured; one is set as active. The active provider powers natural language intake, human-to-graph translation, and agent activation. Without an active provider the system is fully functional for actors who work against the graph directly, but natural language surfaces return 501. LLM provider keys are stored in `gdd.llm_providers` and the server resolves the active provider dynamically per request — no restart needed.
 

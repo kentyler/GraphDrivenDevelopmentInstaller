@@ -40,6 +40,12 @@ A system that requires a separate specification language for its own constructio
 
 The recursion bottoms out somewhere, and the system names that somewhere explicitly. The root intent (`gdd-root`) exists before any graph operation creates it — it is inserted during schema setup, outside the normal graph mechanism. This is not a hack; it is the honest acknowledgment that self-hosting systems have a founding moment that precedes the rules they subsequently enforce. The root intent is the unmoved mover, and it is documented as such rather than hidden as an implementation detail.
 
+### Build instructions on the graph
+
+The self-hosting proof has a practical consequence: each intent in the GDD system graph carries a `build_instructions` field -- actionable text describing what to create to satisfy that intent. This closes the gap between the graph-as-specification and the graph-as-actionable-build-plan. A builder reading only the `build_instructions` field (plus the intent's `description`, `test_condition`, and the projection showing its dependencies) has everything needed to do the work.
+
+The `gdd-system` graph scopes all self-referential intents. A new install bootstraps the schema, then enters the standard loop: `queryIncomplete(graph_id: 'gdd-system', workable: true)` -> read `build_instructions` -> build -> `recordExpression` -> repeat. The skill files remain as reference material (vocabulary, conventions, design philosophy) but are no longer the source of build instructions.
+
 ### The TOC lineage
 
 The intent graph's structural approach to prioritization draws on Goldratt's Theory of Constraints. TOC asks "what is the constraint, and which work generates the most throughput through the constraint?" The intent graph answers this topologically: the constraint is the agent scope with the most queued red intents, and the highest-leverage work is what unblocks the most downstream dependents.

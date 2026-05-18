@@ -59,7 +59,7 @@ Full context for a given intent — dependencies, test condition, expression nod
 
 Direct graph operation for actors who speak graph. Handles all node types -- intent types require test_condition, gap/decision/signal nodes require notes, expression nodes require artifacts.
 
-- **Input**: `{ id: string, type: string, name: string, description?: string, test_condition?: string, test_verification?: string, blocked_by?: string }` — blocked_by is a comma-separated string of node IDs (parsed to array server-side)
+- **Input**: `{ id: string, type: string, name: string, description?: string, test_condition?: string, test_verification?: string, blocked_by?: string, build_instructions?: string }` — blocked_by is a comma-separated string of node IDs (parsed to array server-side); build_instructions is actionable text describing how to satisfy this intent
 - **Maps to**: `createIntent`
 
 ### record_expression

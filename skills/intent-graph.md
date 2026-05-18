@@ -16,6 +16,21 @@ The recursion is the point. A system that can only be specified in prose, by hum
 
 The recursion bottoms out at the root intent (`gdd-root`). Every self-hosting system has a founding moment that precedes the rules it will subsequently enforce — the schema must exist before nodes can be created. The root intent is that ground, named explicitly. See Prerequisites for details.
 
+### The `gdd-system` graph and the self-hosting build loop
+
+Every intent that describes building GDD itself is a member of the `gdd-system` graph. This graph scopes `queryIncomplete(graph_id: 'gdd-system', workable: true)` to return only self-referential intents -- the ones needed to build the system, not application intents that users create later.
+
+Each intent carries a `build_instructions` field -- actionable, self-contained text describing what to create to satisfy that intent. A new install becomes:
+
+1. Bootstrap schema (create `gdd` schema, run enums, tables, root intent, populate scripts)
+2. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
+3. For each workable intent, read its `build_instructions` from the projection
+4. Build what the instructions describe
+5. `recordExpression` when done
+6. Repeat until all intents in `gdd-system` are green
+
+The skill files (`intent-graph.md`, `intent-graph-layers.md`, etc.) are reference material -- vocabulary, conventions, design philosophy. The build sequence comes from the graph itself.
+
 ## Prerequisites
 
 **PostgreSQL** is required. The intent graph stores all state in PostgreSQL.
@@ -96,7 +111,8 @@ Every intent node has these fields:
   },
   "artifacts": "JSONB -- nullable. Only used by expression nodes. The concrete output: files created/modified, schema changes, configuration produced.",
   "notes": "string -- optional for intents, REQUIRED for gaps, decisions, and axioms. Context, reasoning, alternatives considered.",
-  "board_id": "TEXT REFERENCES gdd.boards(id) -- nullable. Associates the node with a board. REQUIRED for axiom nodes."
+  "board_id": "TEXT REFERENCES gdd.boards(id) -- nullable. Associates the node with a board. REQUIRED for axiom nodes.",
+  "build_instructions": "TEXT -- nullable. Actionable instructions for how to satisfy this intent. Self-contained: a builder reading only this field plus description, test_condition, and the projection should know what to create. Does not duplicate description (what it IS) or test_condition (how to verify). Answers: what do I need to create/write/configure?"
 }
 ```
 
