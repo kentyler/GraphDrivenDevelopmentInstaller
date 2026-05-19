@@ -1,0 +1,11 @@
+{
+  "name": "gdd-bootstrap",
+  "version": "1.0.0",
+  "description": "Bootstrap scripts for GDD intent graph",
+  "scripts": {
+    "bootstrap": "node run.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

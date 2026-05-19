@@ -11,28 +11,45 @@ The system supports multiple actor types — humans, LLM agents, application use
 ## What's in the folder
 
 ```
+INTRODUCTION.md                  Philosophical introduction — what intent graphs are and why
 CLAUDE.md                        Entry point — read this first
+bootstrap/
+  run.js                         Single entry point — runs everything below in order
+  db.js                          Database connection (reads GDD_DB_* env vars)
+  package.json                   Dependencies (pg)
+  001-enums.sql                  Node type, edge type, agent trust/status enums
+  002-tables.sql                 Core tables: nodes, edges, graphs, memberships, agents, skills, providers
+  003-bootstrap.sql              Root intent (gdd-root)
+  005-edge-boards-enums.sql      Board/edge-node enums
+  006-edge-boards-tables.sql     Board/edge-node tables
+  004-populate-graph.js          All Layer 0-6 intents with build_instructions (~50 nodes, ~90 edges)
+  009-populate-edge-boards.js    Edge/board intents with build_instructions (~14 nodes)
+  014-create-system-graph.js     Creates gdd-system graph with memberships for all 65 system intents
 skills/
   foundations.md                 Why the system is shaped this way
-  intent-graph.md                The technical spec — vocabulary, operations, layers 0-7
+  intent-graph.md                The technical spec — node model, edge types, conventions
+  intent-graph-layers.md         Layer-by-layer intent definitions (Layers 0-6)
+  system-origins.md              Layer -1 — founding decisions as already-green graph citizens
   agents.md                      Agent definitions — scope, trust, triggers
   graph-completeness.md          The completeness model — red/green, no tension scores
   graph-merge.md                 Cross-graph collaboration
-  mcp-server.md                  MCP server — build instructions, tool definitions, connectors
+  mcp-server.md                  MCP server — tool definitions, connector setup
   ui-client.md                   UI client — user-facing surfaces as external MCP clients
-  session-continuity.md           Session bookmarks — per-actor context recovery, team views
-  community.md                    Optional — post build reports to GitHub Discussions
+  session-continuity.md          Session bookmarks — per-actor context recovery, team views
+  community.md                   Optional — post build reports to GitHub Discussions
 ```
 
 ## Getting started
 
 1. Clone this repo
-2. Open it in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
-3. Let it read `CLAUDE.md`, which directs it to the skill files
-4. It will create a sibling `GDD` directory, set up PostgreSQL, build the schema, and implement all layers including the MCP server
-5. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
+2. Install PostgreSQL and Node.js if not already present
+3. Create the database: `psql -U postgres -c "CREATE DATABASE gdd;"`
+4. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
+5. Open the repo in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
+6. The LLM reads `CLAUDE.md`, queries the graph (`queryIncomplete(graph_id: 'gdd-system', workable: true)`), reads each intent's `build_instructions`, builds it in a sibling `GDD` directory, records an expression, and repeats until all intents are green
+7. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
 
-This repo is the instruction set — the LLM reads from here but builds in separate directories. The backend goes in `GDD`, user-facing UIs go in their own directory (e.g., `GDD-UI`). The skill files describe *what* needs to exist, not *how* to build it. Your LLM makes the implementation choices.
+The `bootstrap/` directory contains the founding scripts — schema, enums, tables, and all intent definitions with actionable `build_instructions`. After bootstrap, the graph is the source of build instructions. The skill files in `skills/` are reference material (vocabulary, conventions, design philosophy). The LLM reads from here but builds in a separate `GDD` directory.
 
 ## Requirements
 
@@ -42,7 +59,7 @@ This repo is the instruction set — the LLM reads from here but builds in separ
 
 ## Community feedback
 
-The [Discussions](https://github.com/kentyler/GraphDrivenDevelopment/discussions) page collects build reports from different models and environments. If you run a build, consider posting what worked and where the instructions were unclear. Gap nodes — places where the skill files weren't precise enough — are especially valuable.
+The [Discussions](https://github.com/kentyler/GraphDrivenDevelopmentInstaller/discussions) page collects build reports from different models and environments. If you run a build, consider posting what worked and where the instructions were unclear. Gap nodes — places where the skill files weren't precise enough — are especially valuable.
 
 See `skills/community.md` for optional automated reporting.
 

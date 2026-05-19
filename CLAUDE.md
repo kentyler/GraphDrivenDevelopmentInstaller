@@ -10,11 +10,13 @@ If the `gdd` database doesn't exist yet:
 
 1. Read `skills/foundations.md` for design philosophy (reference, not build instructions)
 2. Read `skills/intent-graph.md` for vocabulary and conventions (reference, not build instructions)
-3. Follow the prerequisites section in `skills/intent-graph.md` to set up PostgreSQL
-4. Run bootstrap: creates schema, enums, tables, populates intents with `build_instructions`, creates the `gdd-system` graph
-5. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
-6. For each workable intent, read its `build_instructions` from the projection and build it
-7. `recordExpression` when done, repeat until all intents in `gdd-system` are green
+3. Set up PostgreSQL. Create the database: `psql -U postgres -c "CREATE DATABASE gdd;"`
+4. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
+   - This creates the schema, enums, tables, root intent, populates all intents with `build_instructions`, and creates the `gdd-system` graph
+5. Create a sibling `GDD` directory for the build output (source code, server, etc.)
+6. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
+7. For each workable intent, read its `build_instructions` from the projection and build it in the `GDD` directory
+8. `recordExpression` when done, repeat until all intents in `gdd-system` are green
 
 The build sequence comes from the graph -- each intent carries its own `build_instructions` field describing what to create. The skill files are reference material for vocabulary, conventions, and design rationale.
 
