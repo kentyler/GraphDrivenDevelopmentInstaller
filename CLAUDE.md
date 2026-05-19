@@ -4,19 +4,20 @@ Graph-Driven Development. The intent graph is the source of truth for this proje
 
 ## First run
 
-**Build in a separate directory.** This folder contains the skill files — the instructions. Do not write build output (source code, package.json, node_modules, etc.) here. Create a new sibling directory called `GDD` and build there. This folder should remain read-only reference material.
+**Build in a separate directory.** This folder contains the skill files — the instructions. Do not write build output (source code, package.json, node_modules, etc.) here. The bootstrap will create a build folder for you (default: sibling `GDD` directory). This folder should remain read-only reference material.
 
-If the `gdd` database doesn't exist yet:
+If the database doesn't exist yet:
 
 1. Read `skills/foundations.md` for design philosophy (reference, not build instructions)
 2. Read `skills/intent-graph.md` for vocabulary and conventions (reference, not build instructions)
-3. Set up PostgreSQL. Create the database: `psql -U postgres -c "CREATE DATABASE gdd;"`
+3. Set up PostgreSQL (the bootstrap will create the database for you)
 4. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
-   - This creates the schema, enums, tables, root intent, populates all intents with `build_instructions`, and creates the `gdd-system` graph
-5. Create a sibling `GDD` directory for the build output (source code, server, etc.)
-6. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
-7. For each workable intent, read its `build_instructions` from the projection and build it in the `GDD` directory
-8. `recordExpression` when done, repeat until all intents in `gdd-system` are green
+   - You will be prompted for database name, schema name, and build folder (defaults: `gdd`, `gdd`, `../GDD`)
+   - For non-interactive/CI use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
+   - This creates the database, schema, enums, tables, root intent, populates all intents with `build_instructions`, creates the `gdd-system` graph, and creates the build folder
+5. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
+6. For each workable intent, read its `build_instructions` from the projection and build it in the build folder
+7. `recordExpression` when done, repeat until all intents in `gdd-system` are green
 
 The build sequence comes from the graph -- each intent carries its own `build_instructions` field describing what to create. The skill files are reference material for vocabulary, conventions, and design rationale.
 
@@ -106,7 +107,7 @@ Work is creating graph elements — nodes and edges. There is no session contain
 
 ## Stack
 
-- **Database**: PostgreSQL — `gdd` schema in `gdd` database
+- **Database**: PostgreSQL — schema and database names are configurable at bootstrap (default: `gdd` schema in `gdd` database)
 - **Backend**: Node.js/Express (src/server.js)
 - **API**: REST endpoints on port 3000
 - **MCP**: Protocol endpoint at `/mcp` — see `skills/mcp-server.md`
@@ -115,7 +116,7 @@ Work is creating graph elements — nodes and edges. There is no session contain
 
 ## Conventions
 
-- All graph state lives in the `gdd` schema
+- All graph state lives in the configured schema (default `gdd`)
 - The graph is write-only — intents are superseded, never removed or modified. Edges are also supersedable via `supersedeEdge` — wrong structural relationships are corrected by creating a replacement edge, not by deleting the old one. Edges carry optional `description` (rationale) and `created_by` (provenance).
 - Never hardcode credentials
 - Test conditions are optional on intents — an untested intent is "uncollapsed" (recognized but not yet evaluable). It cannot turn green until a test is added via `setTestCondition` and an expression satisfies it. Test conditions are **write-once** — once set, immutable. To change a test, supersede the intent.

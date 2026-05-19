@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { pool, q } = require('./db');
 
 // All node IDs from 004-populate-graph.js and 009-populate-edge-boards.js
 // that describe the GDD system itself (self-referential intents).
@@ -52,11 +52,11 @@ async function createSystemGraph() {
     await client.query('BEGIN');
 
     // Create the gdd-system graph
-    await client.query(`
+    await client.query(q(`
       INSERT INTO gdd.graphs (id, name, owner)
       VALUES ('gdd-system', 'GDD System Build', 'system')
       ON CONFLICT (id) DO NOTHING
-    `);
+    `));
     console.log('Created gdd-system graph.');
 
     // Add memberships for all system nodes
@@ -64,13 +64,13 @@ async function createSystemGraph() {
     let skipped = 0;
     for (const nodeId of systemNodeIds) {
       // Verify node exists before adding membership
-      const exists = await client.query('SELECT 1 FROM gdd.nodes WHERE id = $1', [nodeId]);
+      const exists = await client.query(q('SELECT 1 FROM gdd.nodes WHERE id = $1'), [nodeId]);
       if (exists.rows.length > 0) {
-        await client.query(`
+        await client.query(q(`
           INSERT INTO gdd.graph_memberships (graph_id, node_id)
           VALUES ('gdd-system', $1)
           ON CONFLICT (graph_id, node_id) DO NOTHING
-        `, [nodeId]);
+        `), [nodeId]);
         added++;
       } else {
         console.log(`  Warning: node '${nodeId}' not found, skipping membership.`);
@@ -83,7 +83,7 @@ async function createSystemGraph() {
 
     // Summary
     const count = await client.query(
-      "SELECT COUNT(*) FROM gdd.graph_memberships WHERE graph_id = 'gdd-system'"
+      q("SELECT COUNT(*) FROM gdd.graph_memberships WHERE graph_id = 'gdd-system'")
     );
     console.log(`\ngdd-system graph has ${count.rows[0].count} members.`);
 

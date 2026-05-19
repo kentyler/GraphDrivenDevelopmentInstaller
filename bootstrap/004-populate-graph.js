@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { pool, q } = require('./db');
 
 // All nodes from Layers 0-7 of intent-graph-layers.md
 const nodes = [
@@ -194,11 +194,11 @@ async function populate() {
     // Insert all nodes (ON CONFLICT updates build_instructions for existing installs)
     let inserted = 0;
     for (const node of nodes) {
-      await client.query(`
+      await client.query(q(`
         INSERT INTO gdd.nodes (id, type, name, description, test_condition, test_verification, build_instructions)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (id) DO UPDATE SET build_instructions = EXCLUDED.build_instructions
-      `, [node.id, node.type, node.name, node.description, node.test_condition || null, node.test_verification || null, node.build_instructions || null]);
+      `), [node.id, node.type, node.name, node.description, node.test_condition ? q(node.test_condition) : null, node.test_verification ? q(node.test_verification) : null, node.build_instructions ? q(node.build_instructions) : null]);
       inserted++;
     }
     console.log(`Inserted/updated ${inserted} nodes.`);
@@ -208,14 +208,14 @@ async function populate() {
     for (const edge of edges) {
       // Check if edge already exists to avoid duplicates
       const existing = await client.query(
-        'SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL',
+        q('SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL'),
         [edge.from, edge.to, edge.type]
       );
       if (existing.rows.length === 0) {
-        await client.query(`
+        await client.query(q(`
           INSERT INTO gdd.edges (from_node, to_node, edge_type)
           VALUES ($1, $2, $3)
-        `, [edge.from, edge.to, edge.type]);
+        `), [edge.from, edge.to, edge.type]);
         edgesInserted++;
       }
     }
@@ -224,19 +224,19 @@ async function populate() {
     await client.query('COMMIT');
 
     // Summary
-    const nodeCount = await client.query('SELECT COUNT(*) FROM gdd.nodes');
-    const edgeCount = await client.query('SELECT COUNT(*) FROM gdd.edges');
+    const nodeCount = await client.query(q('SELECT COUNT(*) FROM gdd.nodes'));
+    const edgeCount = await client.query(q('SELECT COUNT(*) FROM gdd.edges'));
     console.log(`\nGraph populated: ${nodeCount.rows[0].count} nodes, ${edgeCount.rows[0].count} edges.`);
 
     // Show what's red (workable)
-    const red = await client.query(`
+    const red = await client.query(q(`
       SELECT n.id, n.name FROM gdd.nodes n
       WHERE n.type NOT IN ('compose', 'expression', 'decision', 'signal')
       AND NOT EXISTS (SELECT 1 FROM gdd.edges e WHERE e.to_node = n.id AND e.edge_type = 'satisfies')
       AND NOT EXISTS (SELECT 1 FROM gdd.edges e WHERE e.to_node = n.id AND e.edge_type = 'supersedes')
       ORDER BY n.id
       LIMIT 10
-    `);
+    `));
     console.log(`\nFirst 10 red intents:`);
     red.rows.forEach(r => console.log(`  ${r.id}: ${r.name}`));
 

@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { pool, q } = require('./db');
 
 // Intents for edge node & board infrastructure
 const nodes = [
@@ -76,11 +76,11 @@ async function populate() {
     // Insert nodes (ON CONFLICT updates build_instructions for existing installs)
     let inserted = 0;
     for (const node of nodes) {
-      await client.query(`
+      await client.query(q(`
         INSERT INTO gdd.nodes (id, type, name, description, test_condition, test_verification, build_instructions, board_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, 'default-board')
         ON CONFLICT (id) DO UPDATE SET build_instructions = EXCLUDED.build_instructions
-      `, [node.id, node.type, node.name, node.description, node.test_condition || null, node.test_verification || null, node.build_instructions || null]);
+      `), [node.id, node.type, node.name, node.description, node.test_condition ? q(node.test_condition) : null, node.test_verification ? q(node.test_verification) : null, node.build_instructions ? q(node.build_instructions) : null]);
       inserted++;
     }
     console.log(`Inserted/updated ${inserted} nodes.`);
@@ -90,25 +90,25 @@ async function populate() {
     for (const edge of edges) {
       // Check if edge already exists to avoid duplicates
       const existing = await client.query(
-        'SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL',
+        q('SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL'),
         [edge.from, edge.to, edge.type]
       );
       if (existing.rows.length === 0) {
-        await client.query(`
+        await client.query(q(`
           INSERT INTO gdd.edges (from_node, to_node, edge_type)
           VALUES ($1, $2, $3)
-        `, [edge.from, edge.to, edge.type]);
+        `), [edge.from, edge.to, edge.type]);
         edgesInserted++;
       }
     }
     console.log(`Inserted ${edgesInserted} edges.`);
 
     // Insert seed edge node
-    await client.query(`
+    await client.query(q(`
       INSERT INTO gdd.edge_nodes (id, board_id, created_by, name, content, weight)
       VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO NOTHING
-    `, [seedEdgeNode.id, seedEdgeNode.board_id, seedEdgeNode.created_by, seedEdgeNode.name, seedEdgeNode.content, seedEdgeNode.weight]);
+    `), [seedEdgeNode.id, seedEdgeNode.board_id, seedEdgeNode.created_by, seedEdgeNode.name, seedEdgeNode.content, seedEdgeNode.weight]);
     console.log('Inserted seed edge node: multi-board architecture vision.');
 
     // Record expressions on completed intents (tables and enums exist after migration)
@@ -120,21 +120,21 @@ async function populate() {
     ];
 
     const exprId = `expression-edge-boards-${Date.now()}`;
-    await client.query(`
+    await client.query(q(`
       INSERT INTO gdd.nodes (id, type, name, description, artifacts, board_id)
       VALUES ($1, 'expression', $2, $3, $4, 'default-board')
       ON CONFLICT (id) DO NOTHING
-    `, [exprId, 'Edge nodes & boards implementation', 'Schema, operations, API, MCP tools, and UI for edge nodes and boards.',
+    `), [exprId, 'Edge nodes & boards implementation', 'Schema, operations, API, MCP tools, and UI for edge nodes and boards.',
         JSON.stringify({ files: ['005-edge-boards-enums.sql', '006-edge-boards-tables.sql', 'boardOperations.js', 'edgeNodeOperations.js'] })]);
 
     for (const intentId of completedIntents) {
       // Check if the intent exists before linking
-      const exists = await client.query('SELECT 1 FROM gdd.nodes WHERE id = $1', [intentId]);
+      const exists = await client.query(q('SELECT 1 FROM gdd.nodes WHERE id = $1'), [intentId]);
       if (exists.rows.length > 0) {
-        await client.query(`
+        await client.query(q(`
           INSERT INTO gdd.edges (from_node, to_node, edge_type)
           VALUES ($1, $2, 'satisfies')
-        `, [exprId, intentId]);
+        `), [exprId, intentId]);
       }
     }
     console.log(`Recorded expression satisfying ${completedIntents.length} intents.`);
@@ -142,10 +142,10 @@ async function populate() {
     await client.query('COMMIT');
 
     // Summary
-    const nodeCount = await client.query('SELECT COUNT(*) FROM gdd.nodes');
-    const edgeCount = await client.query('SELECT COUNT(*) FROM gdd.edges');
-    const edgeNodeCount = await client.query('SELECT COUNT(*) FROM gdd.edge_nodes');
-    const boardCount = await client.query('SELECT COUNT(*) FROM gdd.boards');
+    const nodeCount = await client.query(q('SELECT COUNT(*) FROM gdd.nodes'));
+    const edgeCount = await client.query(q('SELECT COUNT(*) FROM gdd.edges'));
+    const edgeNodeCount = await client.query(q('SELECT COUNT(*) FROM gdd.edge_nodes'));
+    const boardCount = await client.query(q('SELECT COUNT(*) FROM gdd.boards'));
     console.log(`\nGraph: ${nodeCount.rows[0].count} nodes, ${edgeCount.rows[0].count} edges, ${boardCount.rows[0].count} boards, ${edgeNodeCount.rows[0].count} edge nodes.`);
 
   } catch (err) {
