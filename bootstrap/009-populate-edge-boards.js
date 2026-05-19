@@ -112,11 +112,10 @@ async function populate() {
     console.log('Inserted seed edge node: multi-board architecture vision.');
 
     // Record expressions on completed intents (tables and enums exist after migration)
+    // Only tables and enums -- operations are NOT satisfied until actual code is built
     const completedIntents = [
       'table-boards', 'table-edge-nodes', 'table-sensitivity-readings', 'table-tension-readings',
       'type-edge-node-status', 'type-board-status', 'type-board-impact', 'type-tension-character',
-      'op-create-board', 'op-create-edge-node', 'op-convert-gap-to-edge', 'op-expand-edge-node',
-      'op-record-sensitivity', 'op-record-tension'
     ];
 
     const exprId = `expression-edge-boards-${Date.now()}`;
@@ -124,8 +123,8 @@ async function populate() {
       INSERT INTO gdd.nodes (id, type, name, description, artifacts, board_id)
       VALUES ($1, 'expression', $2, $3, $4, 'default-board')
       ON CONFLICT (id) DO NOTHING
-    `), [exprId, 'Edge nodes & boards implementation', 'Schema, operations, API, MCP tools, and UI for edge nodes and boards.',
-        JSON.stringify({ files: ['005-edge-boards-enums.sql', '006-edge-boards-tables.sql', 'boardOperations.js', 'edgeNodeOperations.js'] })]);
+    `), [exprId, 'Edge boards schema bootstrap', 'Bootstrap created board/edge tables and enums via SQL migration.',
+        JSON.stringify({ files: ['005-edge-boards-enums.sql', '006-edge-boards-tables.sql'] })]);
 
     for (const intentId of completedIntents) {
       // Check if the intent exists before linking

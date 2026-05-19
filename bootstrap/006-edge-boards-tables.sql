@@ -4,12 +4,13 @@ CREATE TABLE gdd.boards (
   id TEXT PRIMARY KEY,
   created_at TIMESTAMP DEFAULT NOW(),
   created_by TEXT,
+  name TEXT,
   statement TEXT,
   status gdd.board_status NOT NULL DEFAULT 'active'
 );
 
 CREATE TABLE gdd.edge_nodes (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   board_id TEXT NOT NULL REFERENCES gdd.boards(id),
   created_at TIMESTAMP DEFAULT NOW(),
   created_by TEXT,

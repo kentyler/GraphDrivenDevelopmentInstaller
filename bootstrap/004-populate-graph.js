@@ -27,6 +27,9 @@ const nodes = [
   { id: 'op-create-gap', type: 'implement-operation', name: 'Create gap node', description: 'Convenience for creating gap nodes with required notes.', test_condition: 'Creates gap with null test_condition and required notes. Rejects if notes empty.', test_verification: 'Create gap, verify in queryIncomplete.', build_instructions: "Implement createGap(params) as a convenience wrapper around createIntent with type='gap'. Accept: name, notes (required), id (optional -- generate if not provided), blocked_by[] (optional). Reject if notes empty. Return the created gap node." },
   { id: 'op-create-decision', type: 'implement-operation', name: 'Create decision node', description: 'Create decision node with optional closes edges to gaps.', test_condition: 'Creates decision with notes. Creates closes edges if closes[] provided. Not in queryIncomplete.', test_verification: 'Create decision with closes[], verify edges and exclusion from queryIncomplete.', build_instructions: "Implement createDecision(params) that creates a decision node. Accept: name, description, notes (required), closes[] (optional array of gap IDs), id (optional). Reject if notes empty. If closes[] provided, create closes edges (decision -> gap) for each. Use a transaction. Return the created decision with edges." },
   { id: 'op-supersede', type: 'implement-operation', name: 'Supersede intent', description: 'Create supersedes edge marking old intent as superseded.', test_condition: 'Creates supersedes edge. Old intent excluded from queryIncomplete.', test_verification: 'Supersede intent, verify exclusion.', build_instructions: "Implement supersedeIntent(params) that creates a supersedes edge from new_intent_id to old_intent_id. Accept: new_intent_id, old_intent_id. Validate both nodes exist. Create supersedes edge. The old intent is now superseded (excluded from queryIncomplete). Return the created edge." },
+  { id: 'op-supersede-edge', type: 'implement-operation', name: 'Supersede edge', description: 'Create a replacement edge and mark the old edge as superseded. The replacement inherits from_node, to_node, and edge_type from the old edge unless overridden.', test_condition: 'Creates a replacement edge and sets superseded_by on the old edge. Old edge no longer appears in projections. Attempting to supersede an already-superseded edge fails.', test_verification: 'Integration test: create edge, supersede it, verify old edge has superseded_by set, new edge exists, only new edge appears in projection.', build_instructions: "Implement supersedeEdge(params) that creates a replacement edge and marks the old edge as superseded. Accept: old_edge_id, from_node (optional override), to_node (optional override), edge_type (optional override), description (optional), created_by (optional). Load the old edge. Create a new edge inheriting from_node/to_node/edge_type from the old edge unless overridden. Set old edge's superseded_by to the new edge's id. Return { old_edge, new_edge }." },
+  { id: 'op-set-test-condition', type: 'implement-operation', name: 'Set test condition on untested intent', description: 'Set the test condition on an untested intent. Write-once: once set, test_condition is immutable. To change a test, supersede the intent.', test_condition: 'Sets test_condition on an untested intent. Rejects if intent already has a test condition (write-once). Rejects if node is not an intent type.', test_verification: 'Create untested intent, set test condition, verify it is set. Attempt to set again, verify rejection.', build_instructions: "Implement setTestCondition(params) that sets test_condition on an untested intent. Accept: intent_id, test_condition (REQUIRED non-empty), test_verification (optional). Validate: node exists and is an intent type (not expression/decision/signal/compose/axiom). Reject if test_condition is already set (write-once). Update gdd.nodes SET test_condition, test_verification. Return the updated node." },
+  { id: 'op-query-unlinked', type: 'implement-traversal', name: 'Query unlinked expressions', description: 'Return expression nodes that have no outgoing satisfies edges -- produced but not yet claimed to satisfy any intent.', test_condition: 'Returns only expression nodes with no satisfies edges. Linked expressions are excluded. Supports board_id scoping.', test_verification: 'Integration test: record linked and unlinked expressions, verify only unlinked are returned.', build_instructions: "Implement queryUnlinked(params) that returns expression nodes with no outgoing satisfies edges. Accept: board_id (optional filter). Query gdd.nodes WHERE type='expression' AND NOT EXISTS (SELECT 1 FROM gdd.edges WHERE from_node = nodes.id AND edge_type = 'satisfies'). If board_id provided, filter by it. Return array of unlinked expression nodes." },
   { id: 'op-create-graph', type: 'implement-operation', name: 'Create graph', description: 'Create a graph identity in gdd.graphs.', test_condition: 'Can create and retrieve graph by id.', test_verification: 'Integration test: create graph, verify fields.', build_instructions: "Implement createGraph(params) that inserts into gdd.graphs. Accept: id, name, owner (optional). Return the created graph row." },
   { id: 'op-add-node-to-graph', type: 'implement-operation', name: 'Add node to graph', description: 'Create membership linking node to graph.', test_condition: 'Can add node to graph. Same node in multiple graphs works. Duplicate rejected.', test_verification: 'Integration test with memberships.', build_instructions: "Implement addNodeToGraph(params) that inserts into gdd.graph_memberships. Accept: graph_id, node_id. The UNIQUE constraint handles duplicate rejection. Return the created membership row." },
   { id: 'op-remove-node-from-graph', type: 'implement-operation', name: 'Remove node from graph', description: 'Delete membership. Node itself not deleted.', test_condition: 'Remove from one graph, still in other graphs and nodes table.', test_verification: 'Integration test: add to two, remove from one.', build_instructions: "Implement removeNodeFromGraph(params) that deletes from gdd.graph_memberships. Accept: graph_id, node_id. Only deletes the membership, not the node. Return confirmation." },
@@ -107,6 +110,9 @@ const edges = [
   { from: 'op-create-decision', to: 'op-create-edge', type: 'blocked-by' },
   { from: 'op-supersede', to: 'op-create-intent', type: 'blocked-by' },
   { from: 'op-supersede', to: 'op-create-edge', type: 'blocked-by' },
+  { from: 'op-supersede-edge', to: 'op-create-edge', type: 'blocked-by' },
+  { from: 'op-set-test-condition', to: 'op-create-intent', type: 'blocked-by' },
+  { from: 'op-query-unlinked', to: 'op-record-expression', type: 'blocked-by' },
   { from: 'op-create-graph', to: 'foundation-tables', type: 'blocked-by' },
   { from: 'op-add-node-to-graph', to: 'op-create-graph', type: 'blocked-by' },
   { from: 'op-add-node-to-graph', to: 'op-create-intent', type: 'blocked-by' },
@@ -175,6 +181,9 @@ const edges = [
   { from: 'mcp-tools', to: 'op-query-agents', type: 'blocked-by' },
   { from: 'mcp-tools', to: 'op-create-decision', type: 'blocked-by' },
   { from: 'mcp-tools', to: 'op-supersede', type: 'blocked-by' },
+  { from: 'mcp-tools', to: 'op-supersede-edge', type: 'blocked-by' },
+  { from: 'mcp-tools', to: 'op-set-test-condition', type: 'blocked-by' },
+  { from: 'mcp-tools', to: 'op-query-unlinked', type: 'blocked-by' },
   { from: 'mcp-tools', to: 'op-create-graph', type: 'blocked-by' },
   { from: 'mcp-tools', to: 'op-add-node-to-graph', type: 'blocked-by' },
   { from: 'mcp-tools', to: 'op-remove-node-from-graph', type: 'blocked-by' },
@@ -220,6 +229,31 @@ async function populate() {
       }
     }
     console.log(`Inserted ${edgesInserted} edges.`);
+
+    // Record bootstrap expression satisfying DDL/enum intents that the SQL files already created
+    const bootstrapCompleted = [
+      'table-nodes', 'table-edges', 'table-graphs', 'table-graph-memberships',
+      'table-agents', 'table-skills', 'table-llm-providers',
+      'type-node-type', 'type-edge-type', 'type-agent-trust', 'type-agent-status',
+    ];
+    const bootstrapExprId = `expression-bootstrap-core-schema-${Date.now()}`;
+    await client.query(q(`
+      INSERT INTO gdd.nodes (id, type, name, description, artifacts)
+      VALUES ($1, 'expression', $2, $3, $4)
+      ON CONFLICT (id) DO NOTHING
+    `), [
+      bootstrapExprId,
+      'Core schema bootstrap',
+      'Bootstrap created core tables and enums via SQL migration.',
+      JSON.stringify({ files: ['001-enums.sql', '002-tables.sql', '003-bootstrap.sql'] }),
+    ]);
+    for (const intentId of bootstrapCompleted) {
+      await client.query(q(`
+        INSERT INTO gdd.edges (from_node, to_node, edge_type)
+        VALUES ($1, $2, 'satisfies')
+      `), [bootstrapExprId, intentId]);
+    }
+    console.log(`Recorded bootstrap expression satisfying ${bootstrapCompleted.length} core DDL intents.`);
 
     await client.query('COMMIT');
 

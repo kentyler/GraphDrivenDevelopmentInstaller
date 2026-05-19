@@ -7,4 +7,5 @@ VALUES (
   'The axiomatic ground of the intent graph. This intent exists before any graph operation creates it. The recursion of self-hosting bottoms out here.',
   NULL,
   NULL
-);
+)
+ON CONFLICT (id) DO NOTHING;

@@ -18,6 +18,7 @@ const systemNodeIds = [
   'op-create-intent', 'op-create-edge', 'op-record-expression', 'op-link-expression',
   'op-traverse-dependencies', 'op-query-incomplete', 'op-query-skills',
   'op-create-gap', 'op-create-decision', 'op-supersede',
+  'op-supersede-edge', 'op-set-test-condition', 'op-query-unlinked',
   'op-create-graph', 'op-add-node-to-graph', 'op-remove-node-from-graph',
   'op-query-graph-nodes', 'op-node-graphs',
 
