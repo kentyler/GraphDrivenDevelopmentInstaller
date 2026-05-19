@@ -43,13 +43,15 @@ skills/
 
 1. Clone this repo
 2. Install PostgreSQL and Node.js if not already present
-3. Create the database: `psql -U postgres -c "CREATE DATABASE gdd;"`
-4. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
-5. Open the repo in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
-6. The LLM reads `CLAUDE.md`, queries the graph (`queryIncomplete(graph_id: 'gdd-system', workable: true)`), reads each intent's `build_instructions`, builds it in a sibling `GDD` directory, records an expression, and repeats until all intents are green
-7. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
+3. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
+   - You'll be prompted for database name, schema name, and build folder (defaults: `gdd`, `gdd`, `../GDD`)
+   - The bootstrap creates the database, schema, tables, and populates the intent graph
+   - For non-interactive use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
+4. Open the repo in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
+5. The LLM reads `CLAUDE.md`, queries the graph (`queryIncomplete(graph_id: 'gdd-system', workable: true)`), reads each intent's `build_instructions`, builds it in the build folder, records an expression, and repeats until all intents are green
+6. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
 
-The `bootstrap/` directory contains the founding scripts — schema, enums, tables, and all intent definitions with actionable `build_instructions`. After bootstrap, the graph is the source of build instructions. The skill files in `skills/` are reference material (vocabulary, conventions, design philosophy). The LLM reads from here but builds in a separate `GDD` directory.
+The `bootstrap/` directory contains the founding scripts — schema, enums, tables, and all intent definitions with actionable `build_instructions`. After bootstrap, the graph is the source of build instructions. The skill files in `skills/` are reference material (vocabulary, conventions, design philosophy). The LLM reads from here but builds in a separate directory created by the bootstrap.
 
 ## Requirements
 
