@@ -15,11 +15,23 @@ If the database doesn't exist yet:
    - You will be prompted for database name, schema name, and build folder (defaults: `gdd`, `gdd`, `../GDD`)
    - For non-interactive/CI use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
    - This creates the database, schema, enums, tables, root intent, populates all intents with `build_instructions`, creates the `gdd-system` graph, and creates the build folder
-5. Query the graph: `queryIncomplete(graph_id: 'gdd-system', workable: true)`
-6. For each workable intent, read its `build_instructions` from the projection and build it in the build folder
-7. `recordExpression` when done, repeat until all intents in `gdd-system` are green
+5. **Bootstrap phase (raw SQL)**: The server and MCP endpoint don't exist yet — they are among the intents you're about to build. Query the graph directly to find your first workable intents:
+   ```sql
+   SELECT n.id, n.name, n.build_instructions
+   FROM gdd.nodes n
+   JOIN gdd.graph_memberships gm ON gm.node_id = n.id AND gm.graph_id = 'gdd-system'
+   WHERE n.type NOT IN ('expression', 'decision', 'signal')
+   AND n.id NOT IN (SELECT e.to_node FROM gdd.edges e WHERE e.type = 'satisfies' AND NOT e.is_superseded)
+   AND NOT n.is_superseded
+   AND n.build_instructions IS NOT NULL
+   ORDER BY n.id;
+   ```
+   Among the workable intents you'll find the Express server, REST API, and MCP endpoint. **Build these first** — they are the system's own interaction surface. Read `skills/mcp-server.md` for tool definitions and wiring details.
+6. For each workable intent, read its `build_instructions` and build it in the build folder. Record an expression when done (via raw SQL during this phase — INSERT into `gdd.nodes` with type 'expression' and a row in `gdd.edges` with type 'satisfies').
+7. **Switch to MCP**: Once the Express server and MCP endpoint are running, stop using raw SQL. From this point forward, use the MCP tools (`query_incomplete`, `build_projection`, `record_expression`, etc.) for all graph interaction. The brief raw-SQL phase is over — the system now has its own API.
+8. Continue the loop: `query_incomplete(graph_id: 'gdd-system', workable: true)` → read `build_instructions` from the projection → build → `record_expression` → repeat until all intents in `gdd-system` are green.
 
-The build sequence comes from the graph -- each intent carries its own `build_instructions` field describing what to create. The skill files are reference material for vocabulary, conventions, and design rationale.
+The build sequence comes from the graph — each intent carries its own `build_instructions` field describing what to create. The skill files are reference material for vocabulary, conventions, and design rationale. The system builds its own interaction surface as one of its first acts.
 
 After the system is built, ask the user: **"Do you have an API key for an LLM provider (Anthropic, OpenAI, Google)?"** If yes, add it via the `/api/settings/llm` endpoint or the `configure_provider` MCP tool. Multiple providers can be configured; one is set as active. The active provider powers natural language intake, human-to-graph translation, and agent activation. Without an active provider the system is fully functional for actors who work against the graph directly, but natural language surfaces return 501. LLM provider keys are stored in `gdd.llm_providers` and the server resolves the active provider dynamically per request — no restart needed.
 
@@ -38,6 +50,17 @@ GET /api/projection/session-context-{your-actor-id}/llm
 ```
 
 If it exists and has expressions, read the latest one — it tells you what was done, what's next, and what's unresolved. If it doesn't exist, create one (see `skills/session-continuity.md`). At the end of every session, record a new expression on your session-context intent capturing what you did and what comes next.
+
+**Example — daily startup in Claude Code:**
+
+```
+1. Start the GDD server        node src/server.js (in the build folder)
+2. Pull your session context    GET /api/projection/session-context-claude-code/llm
+3. Read the latest expression   It tells you what was done last, what's next, and what's open
+4. Orient and go                Pick up where you left off, or query_incomplete for fresh work
+```
+
+This is the entire routine. The server must be running before any API or MCP calls work. The session-context projection is your continuity — it replaces the need to re-read files or reconstruct state from scratch. If you're a different actor (a human in Claude Desktop, an agent, another LLM tool), substitute your own actor ID.
 
 ### Actors
 

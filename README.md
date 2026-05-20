@@ -48,8 +48,10 @@ skills/
    - The bootstrap creates the database, schema, tables, and populates the intent graph
    - For non-interactive use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
 4. Open the repo in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
-5. The LLM reads `CLAUDE.md`, queries the graph (`queryIncomplete(graph_id: 'gdd-system', workable: true)`), reads each intent's `build_instructions`, builds it in the build folder, records an expression, and repeats until all intents are green
-6. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
+5. The LLM reads `CLAUDE.md` and queries the graph via raw SQL to find workable intents (the server doesn't exist yet — it's one of the things being built). Among the first workable intents are the Express server and MCP endpoint. **The system builds its own interaction surface as one of its first acts.**
+6. Once the server and MCP endpoint are running, the LLM switches from raw SQL to MCP tools (`query_incomplete`, `build_projection`, `record_expression`, etc.) and continues building through the MCP API it just created.
+7. The loop continues — query what's red, read `build_instructions`, build, record expression — until all intents in `gdd-system` are green.
+8. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
 
 The `bootstrap/` directory contains the founding scripts — schema, enums, tables, and all intent definitions with actionable `build_instructions`. After bootstrap, the graph is the source of build instructions. The skill files in `skills/` are reference material (vocabulary, conventions, design philosophy). The LLM reads from here but builds in a separate directory created by the bootstrap.
 
