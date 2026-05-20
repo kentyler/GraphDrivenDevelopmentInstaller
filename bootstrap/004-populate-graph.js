@@ -236,7 +236,7 @@ async function populate() {
       'table-agents', 'table-skills', 'table-llm-providers',
       'type-node-type', 'type-edge-type', 'type-agent-trust', 'type-agent-status',
     ];
-    const bootstrapExprId = `expression-bootstrap-core-schema-${Date.now()}`;
+    const bootstrapExprId = 'expression-bootstrap-core-schema';
     await client.query(q(`
       INSERT INTO gdd.nodes (id, type, name, description, artifacts)
       VALUES ($1, 'expression', $2, $3, $4)
@@ -248,10 +248,16 @@ async function populate() {
       JSON.stringify({ files: ['001-enums.sql', '002-tables.sql', '003-bootstrap.sql'] }),
     ]);
     for (const intentId of bootstrapCompleted) {
-      await client.query(q(`
-        INSERT INTO gdd.edges (from_node, to_node, edge_type)
-        VALUES ($1, $2, 'satisfies')
-      `), [bootstrapExprId, intentId]);
+      const existing = await client.query(
+        q('SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL'),
+        [bootstrapExprId, intentId, 'satisfies']
+      );
+      if (existing.rows.length === 0) {
+        await client.query(q(`
+          INSERT INTO gdd.edges (from_node, to_node, edge_type)
+          VALUES ($1, $2, 'satisfies')
+        `), [bootstrapExprId, intentId]);
+      }
     }
     console.log(`Recorded bootstrap expression satisfying ${bootstrapCompleted.length} core DDL intents.`);
 

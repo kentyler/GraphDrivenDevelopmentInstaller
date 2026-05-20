@@ -118,7 +118,7 @@ async function populate() {
       'type-edge-node-status', 'type-board-status', 'type-board-impact', 'type-tension-character',
     ];
 
-    const exprId = `expression-edge-boards-${Date.now()}`;
+    const exprId = 'expression-bootstrap-edge-boards';
     await client.query(q(`
       INSERT INTO gdd.nodes (id, type, name, description, artifacts, board_id)
       VALUES ($1, 'expression', $2, $3, $4, 'default-board')
@@ -127,13 +127,18 @@ async function populate() {
         JSON.stringify({ files: ['005-edge-boards-enums.sql', '006-edge-boards-tables.sql'] })]);
 
     for (const intentId of completedIntents) {
-      // Check if the intent exists before linking
       const exists = await client.query(q('SELECT 1 FROM gdd.nodes WHERE id = $1'), [intentId]);
       if (exists.rows.length > 0) {
-        await client.query(q(`
-          INSERT INTO gdd.edges (from_node, to_node, edge_type)
-          VALUES ($1, $2, 'satisfies')
-        `), [exprId, intentId]);
+        const edgeExists = await client.query(
+          q('SELECT 1 FROM gdd.edges WHERE from_node = $1 AND to_node = $2 AND edge_type = $3 AND superseded_by IS NULL'),
+          [exprId, intentId, 'satisfies']
+        );
+        if (edgeExists.rows.length === 0) {
+          await client.query(q(`
+            INSERT INTO gdd.edges (from_node, to_node, edge_type)
+            VALUES ($1, $2, 'satisfies')
+          `), [exprId, intentId]);
+        }
       }
     }
     console.log(`Recorded expression satisfying ${completedIntents.length} intents.`);
