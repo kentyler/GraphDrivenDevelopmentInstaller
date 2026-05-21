@@ -43,6 +43,11 @@ const systemNodeIds = [
   // Layer 6: MCP Server (from 004)
   'mcp-server', 'mcp-endpoint', 'mcp-tools', 'mcp-connectors',
 
+  // P2P Peer Messaging (from 016)
+  'peer-messaging',
+  'type-peer-message-direction', 'type-peer-message-type', 'table-peer-messages',
+  'op-peer-directory', 'op-broadcast-red-nodes', 'op-receive-peer-messages', 'op-respond-to-peer-broadcast',
+
   // Root
   'gdd-root',
 ];

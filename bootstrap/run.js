@@ -119,6 +119,7 @@ async function run() {
       '003-bootstrap.sql',
       '005-edge-boards-enums.sql',
       '006-edge-boards-tables.sql',
+      '015-peer-messages.sql',
     ];
 
     for (const file of sqlFiles) {
@@ -185,6 +186,14 @@ async function run() {
     execSync('node 009-populate-edge-boards.js', { cwd: __dirname, env, stdio: 'inherit' });
   } catch (err) {
     console.error('009-populate-edge-boards.js failed');
+    throw err;
+  }
+
+  try {
+    console.log('\nRunning 016-populate-peer-messaging.js...');
+    execSync('node 016-populate-peer-messaging.js', { cwd: __dirname, env, stdio: 'inherit' });
+  } catch (err) {
+    console.error('016-populate-peer-messaging.js failed');
     throw err;
   }
 
