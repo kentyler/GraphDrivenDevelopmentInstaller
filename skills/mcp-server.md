@@ -223,6 +223,27 @@ List axiom nodes belonging to a board (excluding superseded axioms).
 - **Input**: `{ board_id: string }`
 - **Maps to**: `SELECT` on `gdd.nodes` filtered by type 'axiom' and board_id, excluding superseded
 
+### record_readability_gap
+
+Record that a node is unreadable on a specific board. Creates a gap node with readability context and an `obscures` edge to the target node. Readability is board-relative -- a node may be readable on one board and unreadable on another.
+
+- **Input**: `{ node_id: string, board_id: string, notes: string, created_by?: string }`
+- **Maps to**: `recordReadabilityGap`
+
+### record_clarification
+
+Add a clarification that makes a node readable on a board. Creates a commentary node with `clarifies` and `makes-readable` edges to the target. Can optionally close an existing readability gap.
+
+- **Input**: `{ node_id: string, board_id: string, content: string, actor?: string, close_gap_id?: string }`
+- **Maps to**: `recordClarification`
+
+### query_board_readability
+
+Return nodes on a board grouped by readability status: readable (has `makes-readable` edges), unreadable (has active readability gaps via `obscures` edges), or unclarified (no readability relations).
+
+- **Input**: `{ board_id: string }`
+- **Maps to**: `queryBoardReadability`
+
 ### create_edge_node
 
 Create an edge node -- a node representing something that resists clean articulation. Edge nodes live on a board and can relate to other graph nodes.
