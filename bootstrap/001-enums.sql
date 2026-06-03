@@ -21,7 +21,12 @@ CREATE TYPE gdd.node_type AS ENUM (
   'decision',
   'signal',
   'expression',
-  'axiom'
+  'axiom',
+  -- Grammar inscription kinds (added for grammar conformance)
+  'actor',
+  'projection',
+  'retro-projection',
+  'commentary'
 );
 
 CREATE TYPE gdd.edge_type AS ENUM (
@@ -31,7 +36,28 @@ CREATE TYPE gdd.edge_type AS ENUM (
   'refines',
   'supersedes',
   'closes',
-  'satisfies'
+  'satisfies',
+  -- Grammar relation kinds (added for grammar conformance)
+  'depends-on',
+  'tested-by',
+  'participates-in',
+  'contradicts',
+  'clarifies',
+  'makes-readable',
+  'obscures',
+  'marks-edge',
+  'projects-as',
+  'projects-to',
+  'retro-projects',
+  'interprets-as',
+  'infers-intent',
+  'infers-test',
+  'infers-gap',
+  'infers-decision',
+  'signals',
+  'authorizes',
+  'expresses',
+  'comments-on'
 );
 
 CREATE TYPE gdd.agent_trust AS ENUM (

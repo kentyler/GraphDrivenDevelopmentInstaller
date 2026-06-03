@@ -48,6 +48,14 @@ const systemNodeIds = [
   'type-peer-message-direction', 'type-peer-message-type', 'table-peer-messages',
   'op-peer-directory', 'op-broadcast-red-nodes', 'op-receive-peer-messages', 'op-respond-to-peer-broadcast',
 
+  // Layer 7: Grammar conformance (from 004)
+  'table-node-board-memberships',
+  'op-record-readability-gap', 'op-record-clarification', 'op-query-board-readability',
+  'op-record-projection', 'op-query-projections',
+  'op-record-retro-projection', 'op-query-retro-projections',
+  'op-record-actor', 'op-record-commentary', 'op-query-commentary',
+  'op-export-graph-package', 'op-import-graph-package',
+
   // Root
   'gdd-root',
 ];
