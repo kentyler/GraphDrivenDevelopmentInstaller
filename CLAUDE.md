@@ -166,7 +166,7 @@ Do not create separate databases, schemas, or GDD instances for different projec
 
 Work is creating graph elements — nodes and edges. There is no session container.
 
-1. Query the graph (`queryIncomplete`) to see what's red
+1. Query the graph (`queryIncomplete` with `board_id` or `graph_id`) to see what's red
 2. Build a projection for the intent you're working on
 3. Do the work — create nodes and edges (including expression nodes with satisfies edges)
 4. Record the expression on the intent you satisfied

@@ -36,9 +36,11 @@ Natural language entry point. The user says something; the LLM constructs the in
 
 ### query_incomplete
 
-What's red. Returns intents and gaps with no incoming satisfies edges (excluding expression, decision, and signal nodes). Supports a workable filter to return only red intents whose dependencies are all green.
+What's red on a board or graph. Returns intents and gaps with no incoming satisfies edges (excluding expression, decision, signal, axiom, actor, projection, retro-projection, and commentary nodes). Supports a workable filter to return only red intents whose dependencies are all green.
 
-- **Input**: `{ workable?: boolean, graph_id?: string, board_id?: string }` — when workable is true, returns only red intents whose blocked-by dependencies all have incoming satisfies edges; graph_id scopes the query to nodes within that graph's memberships; board_id scopes the query to nodes assigned to that board
+**Scope is required.** At least one of `board_id`, `graph_id`, or `scope: "global"` must be provided. No one plays the whole graph -- unscoped queries are rejected. Use `scope: "global"` as an explicit opt-in for whole-graph diagnostic queries.
+
+- **Input**: `{ workable?: boolean, graph_id?: string, board_id?: string, scope?: string }` — board_id scopes to nodes on that board (via `node_board_memberships` or `nodes.board_id`); graph_id scopes to nodes within that graph's memberships; scope "global" is the explicit whole-graph opt-in; workable true returns only red intents whose blocked-by dependencies all have incoming satisfies edges
 - **Maps to**: `queryIncomplete`
 
 ### query_skills

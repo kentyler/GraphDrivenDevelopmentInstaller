@@ -41,7 +41,7 @@ f5a0bc7  Phase 6: Portable graph package export/import
 
 ## Residual gaps (priority order)
 
-1. **`queryIncomplete` defaults to whole-graph scope** -- most conceptually important; touches "no one plays the whole graph." Should be addressed before other cleanup.
+1. ~~`queryIncomplete` defaults to whole-graph scope~~ **Resolved.** `queryIncomplete` now requires `board_id`, `graph_id`, or explicit `scope: "global"`. Unscoped queries are rejected. (Commit after v1 tag.)
 
 2. **Edge nodes isolated in separate table** -- edge nodes should eventually participate in the graph as graph-significant inscriptions, not supporting records. The `marks-edge` edge type is available but unusable until edge nodes can be endpoints in `gdd.edges`.
 
