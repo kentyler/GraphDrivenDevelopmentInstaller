@@ -12,7 +12,7 @@ Founding decisions (PostgreSQL, Express, MCP SDK, etc.) inscribed as already-gre
 
 ### Layer 0: Foundation -- Schema and Core Types
 
-Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics. The board and edge-node infrastructure tables (boards, edge_nodes, sensitivity_readings, tension_readings, expansion_events, conversion_events) carry temporal metadata (created_at, read_at, occurred_at) because they are accumulating observation records, not graph topology -- readings and events are time-series data by nature.
+Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics. The board infrastructure tables (boards, sensitivity_readings, tension_readings) carry temporal metadata (created_at, read_at) because they are accumulating observation records, not graph topology -- readings are time-series data by nature. Edge nodes are ordinary `gdd.nodes` rows with type `'edge-node'` -- no separate table. Their lifecycle (conversion, expansion) is expressed through graph topology (decisions with `closes` edges, gaps with `refines` edges).
 
 ```json
 [
@@ -21,7 +21,7 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "type": "compose",
     "name": "Graph foundation tables",
     "description": "The database tables that store the global intent graph.",
-    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status", "table-boards", "table-edge-nodes", "table-sensitivity-readings", "table-tension-readings", "table-expansion-events", "table-conversion-events", "type-edge-node-status", "type-board-status", "type-board-impact", "type-tension-character"]
+    "children": ["table-nodes", "table-edges", "table-graphs", "table-graph-memberships", "table-agents", "table-skills", "table-llm-providers", "type-node-type", "type-edge-type", "type-agent-trust", "type-agent-status", "table-boards", "table-sensitivity-readings", "table-tension-readings", "table-node-board-memberships", "type-board-status", "type-board-impact", "type-tension-character"]
   },
   {
     "id": "table-nodes",
@@ -160,17 +160,6 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     }
   },
   {
-    "id": "table-edge-nodes",
-    "type": "define-table",
-    "name": "Edge nodes table",
-    "description": "Stores edge nodes -- boundary markers that should not be resolved. Each edge node belongs to a board, carries content and weight, and tracks its lifecycle status. A source_gap_id links back to the gap node that was converted into this edge node (if applicable).",
-    "table_name": "gdd.edge_nodes",
-    "test": {
-      "condition": "Table gdd.edge_nodes exists with columns: id, board_id, created_at, created_by, name, content, related_nodes, weight, status, source_gap_id.",
-      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='edge_nodes'"
-    }
-  },
-  {
     "id": "table-sensitivity-readings",
     "type": "define-table",
     "name": "Sensitivity readings table",
@@ -190,42 +179,6 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "test": {
       "condition": "Table gdd.tension_readings exists with columns: id, board_id, read_at, read_by, signal, edge_node_id, tension_character.",
       "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='tension_readings'"
-    }
-  },
-  {
-    "id": "table-expansion-events",
-    "type": "define-table",
-    "name": "Expansion events table",
-    "description": "Records when an edge node is expanded into a gap -- the boundary becomes interior work. Links the edge node to the new gap node with a description of why expansion occurred.",
-    "table_name": "gdd.expansion_events",
-    "blocked_by": ["table-edge-nodes"],
-    "test": {
-      "condition": "Table gdd.expansion_events exists with columns: id (text PK, default gen_random_uuid), edge_node_id (text FK to gdd.edge_nodes, NOT NULL), occurred_at (timestamp, default NOW()), description (text), new_gap_node_id (text FK to gdd.nodes).",
-      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='expansion_events'"
-    }
-  },
-  {
-    "id": "table-conversion-events",
-    "type": "define-table",
-    "name": "Conversion events table",
-    "description": "Records when a gap is converted into an edge node -- an interior question becomes a boundary marker. Links the edge node to the original gap and records failed articulation attempts.",
-    "table_name": "gdd.conversion_events",
-    "blocked_by": ["table-edge-nodes"],
-    "test": {
-      "condition": "Table gdd.conversion_events exists with columns: id (text PK, default gen_random_uuid), edge_node_id (text FK to gdd.edge_nodes, NOT NULL), occurred_at (timestamp, default NOW()), description (text), original_gap_node_id (text FK to gdd.nodes), failed_articulation_attempts (TEXT[]).",
-      "verification": "SELECT * FROM information_schema.columns WHERE table_schema='gdd' AND table_name='conversion_events'"
-    }
-  },
-  {
-    "id": "type-edge-node-status",
-    "type": "define-type",
-    "name": "Edge node status enum",
-    "description": "Edge node lifecycle: active (boundary marker in effect), expanded (boundary became interior work -- gap created), converted (gap was converted to this edge node).",
-    "type_name": "gdd.edge_node_status",
-    "values": ["active", "expanded", "converted"],
-    "test": {
-      "condition": "Enum gdd.edge_node_status exists with values: active, expanded, converted.",
-      "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.edge_node_status'::regtype"
     }
   },
   {
@@ -621,28 +574,28 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-create-edge-node",
     "type": "implement-operation",
     "name": "Create edge node",
-    "description": "Create an edge node on a board with name, content, and optional weight. Edge nodes are boundary markers that should not be resolved. They do not appear in queryIncomplete results.",
+    "description": "Create an edge node on a board. Edge nodes are ordinary gdd.nodes rows with type 'edge-node'. Content stored in notes, weight/created_by in artifacts JSONB. Related nodes linked via marks-edge edges. Does not appear in queryIncomplete results.",
     "operation_name": "createEdgeNode",
     "input": "name, board_id, id (optional), content (optional), related_nodes (optional array), weight (optional), created_by (optional)",
-    "output": "Created edge node with default status 'active'",
-    "blocked_by": ["table-edge-nodes", "op-create-board"],
+    "output": "Created edge node (gdd.nodes row with type 'edge-node')",
+    "blocked_by": ["op-create-board", "op-create-intent", "op-create-edge"],
     "test": {
-      "condition": "Can create edge node with board_id, name, content. Edge node is queryable. Does not appear in queryIncomplete.",
-      "verification": "Integration test: create edge node, verify isolation from queryIncomplete."
+      "condition": "Can create edge node with board_id, name, content. Edge node is a gdd.nodes row with type edge-node. Can be endpoint of marks-edge edges. Does not appear in queryIncomplete.",
+      "verification": "Integration test: create edge node, verify it is a gdd.nodes row, verify marks-edge edge works, verify isolation from queryIncomplete."
     }
   },
   {
     "id": "op-query-edge-nodes",
     "type": "implement-traversal",
     "name": "Query edge nodes",
-    "description": "Return edge nodes, optionally filtered by board_id and/or status. Each edge node includes its latest sensitivity reading.",
+    "description": "Return edge nodes (gdd.nodes where type='edge-node'), optionally filtered by board_id via node_board_memberships. Each edge node includes its latest sensitivity reading.",
     "traversal_name": "queryEdgeNodes",
-    "start": "gdd.edge_nodes table",
-    "pattern": "Filter by board_id (optional), status (optional), return with latest sensitivity reading",
+    "start": "gdd.nodes where type='edge-node'",
+    "pattern": "Filter by board_id (optional via node_board_memberships), return with latest sensitivity reading",
     "returns": "Array of edge nodes with latest_reading",
     "blocked_by": ["op-create-edge-node"],
     "test": {
-      "condition": "Returns all edge nodes when no filter given. Supports board_id and status filters. Each edge node includes latest_reading (or null).",
+      "condition": "Returns all edge nodes when no filter given. Supports board_id filter. Each edge node includes latest_reading (or null).",
       "verification": "Integration test: create edge nodes on different boards, verify filtered queries."
     }
   },
@@ -650,14 +603,14 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-get-edge-node",
     "type": "implement-traversal",
     "name": "Get edge node detail",
-    "description": "Return a single edge node with its full history: all sensitivity readings, expansion events, and conversion events.",
+    "description": "Return a single edge node (gdd.nodes row with type 'edge-node') with its sensitivity readings and related nodes (via marks-edge edges).",
     "traversal_name": "getEdgeNode",
     "start": "An edge node ID",
-    "pattern": "Fetch edge node with sensitivity readings, expansion events, conversion events",
-    "returns": "Edge node with sensitivity_readings, expansion_events, conversion_events arrays",
+    "pattern": "Fetch edge node from gdd.nodes, join sensitivity_readings, join edges where edge_type='marks-edge'",
+    "returns": "Edge node with sensitivity_readings array and related_nodes array",
     "blocked_by": ["op-create-edge-node"],
     "test": {
-      "condition": "Returns edge node with full history. Returns 404 if edge node does not exist.",
+      "condition": "Returns edge node with sensitivity readings and related nodes. Returns 404 if edge node does not exist.",
       "verification": "Integration test: create edge node, record readings, verify detail includes all history."
     }
   },
@@ -670,6 +623,7 @@ These intents are all `blocked-by` the foundation tables.
     "input": "edge_node_id, signal, read_by (optional), board_impact (optional: stable, shifting, reorganizing)",
     "output": "Created sensitivity reading",
     "blocked_by": ["table-sensitivity-readings", "op-create-edge-node"],
+    "_note": "edge_node_id FK now references gdd.nodes, not a separate table",
     "test": {
       "condition": "Sensitivity reading created with edge_node_id, signal, board_impact. Visible in getEdgeNode detail.",
       "verification": "Integration test: create edge node, record reading, verify in getEdgeNode."
@@ -679,28 +633,28 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-convert-gap-to-edge",
     "type": "implement-operation",
     "name": "Convert gap to edge node",
-    "description": "Convert a gap node to an edge node -- marks a boundary that should not be resolved. Creates a decision node closing the gap, creates an edge node with source_gap_id pointing back to the gap, and records a conversion event. The gap no longer appears in queryIncomplete because it is closed by the decision.",
+    "description": "Convert a gap node to an edge node -- marks a boundary that should not be resolved. Creates a decision node with closes edge to the gap, creates an edge-node in gdd.nodes, and links them via marks-edge edge. No separate conversion_events table -- the decision and edges ARE the conversion record.",
     "operation_name": "convertGapToEdge",
     "input": "gap_id, board_id, content (optional), description (optional), failed_articulation_attempts (optional array), created_by (optional)",
     "output": "{ edge_node, decision }",
     "blocked_by": ["op-create-edge-node", "op-create-decision"],
     "test": {
-      "condition": "Creates decision closing gap, creates edge node with source_gap_id, creates conversion event. Gap no longer in queryIncomplete.",
-      "verification": "Integration test: create gap, convert, verify decision, edge node, and conversion event."
+      "condition": "Creates decision closing gap, creates edge-node in gdd.nodes. Gap closed by decision. Conversion expressed as graph topology.",
+      "verification": "Integration test: create gap, convert, verify decision, edge node, and closes edge."
     }
   },
   {
     "id": "op-expand-edge-node",
     "type": "implement-operation",
     "name": "Expand edge node",
-    "description": "Expand an active edge node into a gap -- the boundary becomes interior work. The edge node's status changes to 'expanded', a new gap node is created with the edge node's board_id, and an expansion event is recorded. Only active edge nodes can be expanded.",
+    "description": "Expand an edge node into a gap -- the boundary becomes interior work. A new gap node is created with a refines edge to the edge node. No separate expansion_events table -- the gap and refines edge ARE the expansion record. Optionally supersede the edge node if fully expanded.",
     "operation_name": "expandEdgeNode",
     "input": "edge_node_id, gap_name, gap_notes, description (optional), created_by (optional)",
-    "output": "{ edge_node (status: expanded), gap (new gap node) }",
+    "output": "{ edge_node, gap (new gap node) }",
     "blocked_by": ["op-create-edge-node", "op-create-gap"],
     "test": {
-      "condition": "Edge node status changes to expanded. New gap node created with board_id. Expansion event recorded. Only active edge nodes can be expanded.",
-      "verification": "Integration test: create edge node, expand, verify gap and status change. Attempt to expand non-active edge node, verify rejection."
+      "condition": "New gap node created with refines edge to edge node. Edge node superseded if fully expanded.",
+      "verification": "Integration test: create edge node, expand, verify gap and refines edge."
     }
   },
   {
@@ -799,10 +753,10 @@ These intents are blocked by Layer 1 operations.
     "description": "Given a projection, produce a dense structured representation optimized for LLM consumption: full node data, edge types, red/green status, test conditions, dependency chains, board context (board with tension, axioms, edge nodes with sensitivity readings). This replaces the system prompt -- the LLM reads this to understand its situation.",
     "from_repr": "Projection (graph structure)",
     "to_repr": "Structured JSON with full relational detail",
-    "mechanism": "Direct serialization of graph structure with computed fields (status, completeness). Board/axiom/edge-node context included when the vantage node has a board_id.",
+    "mechanism": "Direct serialization of graph structure with computed fields (status, completeness). Board/axiom context included when the vantage node has a board_id. Edge nodes (type='edge-node') included with their sensitivity readings.",
     "blocked_by": ["projection-mechanism"],
     "test": {
-      "condition": "LLM-legible rendering includes all node fields, all edges, red/green status, test conditions. When board context is present, includes board (with latest tension), axioms array, and edge_nodes array (with latest sensitivity readings). An LLM reading this output can determine what to work on next without any additional context.",
+      "condition": "LLM-legible rendering includes all node fields, all edges, red/green status, test conditions. When board context is present, includes board (with latest tension) and axioms array. Edge nodes (type='edge-node') appear as ordinary nodes with their sensitivity readings. An LLM reading this output can determine what to work on next without any additional context.",
       "verification": "Feed rendering to an LLM, ask it to identify the highest-priority work, verify it selects correctly"
     }
   },
@@ -1088,7 +1042,7 @@ These edges connect the intents above:
 
 ```
 foundation-tables, projection-mechanism, dual-repr, actor-integration, human-surfaces, mcp-server, system-origins  ->  (contained by)  ->  gdd-root
-table-nodes, table-edges, table-graphs, table-graph-memberships, table-agents, table-skills, table-llm-providers, type-node-type, type-edge-type, type-agent-trust, type-agent-status, table-boards, table-edge-nodes, table-sensitivity-readings, table-tension-readings, type-edge-node-status, type-board-status, type-board-impact, type-tension-character  ->  (contained by)  ->  foundation-tables
+table-nodes, table-edges, table-graphs, table-graph-memberships, table-agents, table-skills, table-llm-providers, type-node-type, type-edge-type, type-agent-trust, type-agent-status, table-boards, table-sensitivity-readings, table-tension-readings, table-node-board-memberships, type-board-status, type-board-impact, type-tension-character  ->  (contained by)  ->  foundation-tables
 op-create-intent, op-create-edge                                ->  (blocked-by)    ->  foundation-tables
 op-record-expression                                            ->  (blocked-by)    ->  op-create-intent, op-create-edge
 op-link-expression                                              ->  (blocked-by)    ->  op-record-expression
@@ -1112,7 +1066,7 @@ op-update-board-statement                                       ->  (blocked-by)
 op-record-tension                                               ->  (blocked-by)    ->  table-tension-readings, op-create-board
 op-assign-node-to-board                                         ->  (blocked-by)    ->  op-create-board, op-create-intent
 op-query-board-nodes                                            ->  (blocked-by)    ->  op-assign-node-to-board
-op-create-edge-node                                             ->  (blocked-by)    ->  table-edge-nodes, op-create-board
+op-create-edge-node                                             ->  (blocked-by)    ->  op-create-board, op-create-intent, op-create-edge
 op-query-edge-nodes                                             ->  (blocked-by)    ->  op-create-edge-node
 op-get-edge-node                                                ->  (blocked-by)    ->  op-create-edge-node
 op-record-sensitivity                                           ->  (blocked-by)    ->  table-sensitivity-readings, op-create-edge-node
@@ -1121,12 +1075,9 @@ op-expand-edge-node                                             ->  (blocked-by)
 op-query-unlinked                                               ->  (blocked-by)    ->  op-record-expression
 op-query-current-nodes                                          ->  (blocked-by)    ->  op-create-intent
 table-boards                                                    ->  (blocked-by)    ->  foundation-tables
-table-edge-nodes                                                ->  (blocked-by)    ->  table-boards
-table-sensitivity-readings                                      ->  (blocked-by)    ->  table-edge-nodes
+table-sensitivity-readings                                      ->  (blocked-by)    ->  foundation-tables, table-boards
 table-tension-readings                                          ->  (blocked-by)    ->  table-boards
-table-expansion-events                                          ->  (blocked-by)    ->  table-edge-nodes
-table-conversion-events                                         ->  (blocked-by)    ->  table-edge-nodes
-type-edge-node-status, type-board-status, type-board-impact, type-tension-character  ->  (blocked-by)  ->  foundation-tables
+type-board-status, type-board-impact, type-tension-character     ->  (blocked-by)    ->  foundation-tables
 op-build-projection                                             ->  (contained by)  ->  projection-mechanism
 op-render-human, op-render-llm, op-translate-repr               ->  (contained by)  ->  dual-repr
 op-transduce-external, op-client-intake, op-define-agent, op-activate-agent, op-query-agents  ->  (contained by)  ->  actor-integration

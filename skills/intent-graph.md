@@ -492,7 +492,7 @@ When populating a new intent graph for a project:
 
 The self-hosting claim requires a concrete bootstrap sequence. The system must exist before it can track its own construction, so the first few steps are privileged — they happen outside the normal graph mechanism.
 
-1. **Create schema and tables.** Build the `gdd` schema and all Layer 0 tables (`gdd.nodes`, `gdd.edges`, `gdd.graphs`, `gdd.graph_memberships`, `gdd.agents`, `gdd.skills`, `gdd.llm_providers`, `gdd.boards`, `gdd.edge_nodes`, `gdd.sensitivity_readings`, `gdd.tension_readings`) plus enums. This is raw DDL.
+1. **Create schema and tables.** Build the `gdd` schema and all Layer 0 tables (`gdd.nodes`, `gdd.edges`, `gdd.graphs`, `gdd.graph_memberships`, `gdd.agents`, `gdd.skills`, `gdd.llm_providers`, `gdd.boards`, `gdd.sensitivity_readings`, `gdd.tension_readings`, `gdd.node_board_memberships`) plus enums. Edge nodes are ordinary `gdd.nodes` rows with type `'edge-node'` -- no separate table. This is raw DDL.
 
 2. **Insert root intent.** Insert the `gdd-root` node directly into `gdd.nodes`. This is the axiomatic ground — it exists before the graph operations do.
 
