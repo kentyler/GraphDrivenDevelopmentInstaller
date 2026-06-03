@@ -1,3 +1,19 @@
+# Status note
+
+This skill file describes the current reference expression and its design philosophy. It should be read after `docs/gdd-invariants.md` and `docs/gdd-logical-graph-grammar.md`.
+
+If this file appears to identify GDD with the current PostgreSQL/Node/MCP implementation, treat that as expression-layer language. The governing distinction is: the invariants define the play; the current implementation is one expression.
+
+Key current additions:
+- the graph is an agencement, not a representation
+- no one plays the whole graph
+- boards are bounded by incompleteness
+- readability is board-relative and retroactive
+- a graph can make a system; a system can suggest many graphs
+- the graph is the zip file; the application is one decompression
+
+---
+
 # Foundations
 
 Read this before the technical spec. The first half explains why the system is shaped the way it is — the intellectual commitments that precede the design. The second half describes the stances you need to hold while building it — the patterns you'll instinctively reach for that the system deliberately avoids.

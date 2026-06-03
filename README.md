@@ -1,69 +1,148 @@
-# Graph-Driven Development
+# Graph-Driven Development Installer
 
-A set of skill files that teach a frontier LLM to build a graph-driven development system. You download the folder, point your LLM at it, and it builds the system from the instructions.
+GDD-install is not a finished application. It is an instruction set for producing graph-driven development systems.
+
+The project begins with **invariants**, not code. The invariants define the possibility space. The logical graph grammar translates those invariants into a graph vocabulary. Concrete implementations are **reference expressions**: historical productions that preserve the invariants under particular technology choices.
+
+The current bootstrap builds one reference expression: a PostgreSQL + Node/Express + MCP-oriented graph system. That current expression is useful and concrete, but it is not the constitutional form of GDD.
+
+## Core claim
+
+Intent graphs represent the field of work in a form LLMs can reason over.
+
+A task says what to do. An intent says what must become true. An expression is an artifact that satisfies an intent's test. Boards make limited fields of play. Edges appear where a board encounters what it cannot yet contain.
+
+The graph is the portable form. The application is one expression.
+
+Intent graphs make applications portable across technologies, organizations, and LLM generations.
+
+## Document hierarchy
+
+Read the documents in this order:
+
+```text
+docs/gdd-invariants.md                 Constitutional layer: what must remain true
+docs/gdd-logical-graph-grammar.md      Grammar layer: graph vocabulary and relations
+docs/gdd-conformance-checklist.md      Evaluation checklist for candidate expressions
+INTRODUCTION.md                        Conceptual introduction
+CLAUDE.md                              Build/session instructions for Claude Code and similar tools
+skills/                                Reference skill files for the current expression
+bootstrap/                             Current PostgreSQL/Node bootstrap reference expression
+```
 
 ## What this is
 
-The intent graph is a development system where every piece of work — what needs to exist, what depends on what, what "done" looks like, and what was produced — is represented as a testable node in a dependency graph. It applies TDD at the architecture level: intents have test conditions, expressions satisfy them, and "what to do next" is always "what's red."
+GDD is a way to build and use systems through an intent graph.
 
-The system supports multiple actor types — humans, LLM agents, application users, external forces — all running the same loop through the same graph. Agents are first-class graph entities with scoped jurisdiction, trust-bounded write permissions, and auditable sessions.
+The graph is:
+
+- shared ground for humans, LLMs, agents, software systems, tests, and external forces
+- optimized internally for LLM reading and writing
+- projected outward into human-usable forms such as task lists, dashboards, diagrams, and narratives
+- append-only, with change represented through supersession, refinement, satisfaction, closure, contradiction, tension, decisions, signals, gaps, and edge nodes
+- board-relative: no one plays the whole graph
+- non-representational: the graph participates in the work rather than representing the whole situation
+
+## Projection and retro-projection
+
+A graph can make a system; a system can suggest many graphs.
+
+A graph may project more than one faithful system. A working system may be retro-projected into more than one possible graph. Migration and modernization therefore should not be treated as direct translation:
+
+```text
+old system → new system
+```
+
+Instead, they should be treated as graph-mediated transformation:
+
+```text
+old system → retro-projected graph(s) → selected board → new system expression
+```
+
+Reverse engineering an existing system or application means producing one or more situated intent-graph readings from its working artifacts: code, schema, forms, reports, workflows, permissions, user habits, and operational conventions. It is not extraction of one true requirements graph.
 
 ## What's in the folder
 
-```
-INTRODUCTION.md                  Philosophical introduction — what intent graphs are and why
-CLAUDE.md                        Entry point — read this first
+```text
+INTRODUCTION.md                  Conceptual introduction
+CLAUDE.md                        Entry point for Claude Code and other LLM coding tools
+docs/
+  gdd-invariants.md              Constitutional invariants
+  gdd-logical-graph-grammar.md   Second-layer graph grammar
+  gdd-conformance-checklist.md   Checklist for evaluating candidate systems
+  gdd-install-catch-up-notes.md  Notes describing the current conceptual catch-up
 bootstrap/
-  run.js                         Single entry point — runs everything below in order
+  run.js                         Current reference-expression bootstrap
   db.js                          Database connection (reads GDD_DB_* env vars)
   package.json                   Dependencies (pg)
-  001-enums.sql                  Node type, edge type, agent trust/status enums
-  002-tables.sql                 Core tables: nodes, edges, graphs, memberships, agents, skills, providers
+  001-enums.sql                  Current reference-expression enums
+  002-tables.sql                 Current reference-expression tables
   003-bootstrap.sql              Root intent (gdd-root)
+  004-populate-graph.js          Current Layer 0-6 intents with build_instructions
   005-edge-boards-enums.sql      Board/edge-node enums
   006-edge-boards-tables.sql     Board/edge-node tables
-  004-populate-graph.js          All Layer 0-6 intents with build_instructions (~50 nodes, ~90 edges)
-  009-populate-edge-boards.js    Edge/board intents with build_instructions (~14 nodes)
-  014-create-system-graph.js     Creates gdd-system graph with memberships for all 65 system intents
+  009-populate-edge-boards.js    Edge/board intents with build_instructions
+  014-create-system-graph.js     Creates gdd-system graph with memberships
+  015-peer-messages.sql          Peer messaging tables
+  016-populate-peer-messaging.js Peer messaging intents
 skills/
-  foundations.md                 Why the system is shaped this way
-  intent-graph.md                The technical spec — node model, edge types, conventions
-  intent-graph-layers.md         Layer-by-layer intent definitions (Layers 0-6)
-  system-origins.md              Layer -1 — founding decisions as already-green graph citizens
+  foundations.md                 Why the current expression is shaped this way
+  intent-graph.md                Current technical vocabulary and conventions
+  intent-graph-layers.md         Layer-by-layer intent definitions
+  system-origins.md              Layer -1 — founding decisions
   agents.md                      Agent definitions — scope, trust, triggers
-  graph-completeness.md          The completeness model — red/green, no tension scores
+  graph-completeness.md          Red/green completeness model
   graph-merge.md                 Cross-graph collaboration
-  mcp-server.md                  MCP server — tool definitions, connector setup
-  ui-client.md                   UI client — user-facing surfaces as external MCP clients
-  session-continuity.md          Session bookmarks — per-actor context recovery, team views
-  community.md                   Optional — post build reports to GitHub Discussions
+  mcp-server.md                  MCP server tool definitions
+  ui-client.md                   UI client surfaces as external MCP clients
+  session-continuity.md          Session bookmarks and recovery
+  community.md                   Optional build reports to GitHub Discussions
 ```
 
-## Getting started
+## Getting started with the current reference expression
 
-1. Clone this repo
-2. Install PostgreSQL and Node.js if not already present
-3. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
-   - You'll be prompted for database name, schema name, and build folder (defaults: `gdd`, `gdd`, `../GDD`)
-   - The bootstrap creates the database, schema, tables, and populates the intent graph
-   - For non-interactive use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
-4. Open the repo in your LLM tool of choice (Claude Code, Cursor, Windsurf, etc.)
-5. The LLM reads `CLAUDE.md` and queries the graph via raw SQL to find workable intents (the server doesn't exist yet — it's one of the things being built). Among the first workable intents are the Express server and MCP endpoint. **The system builds its own interaction surface as one of its first acts.**
-6. Once the server and MCP endpoint are running, the LLM switches from raw SQL to MCP tools (`query_incomplete`, `build_projection`, `record_expression`, etc.) and continues building through the MCP API it just created.
-7. The loop continues — query what's red, read `build_instructions`, build, record expression — until all intents in `gdd-system` are green.
-8. User-facing surfaces (natural language intake, application UIs) are built separately as MCP clients — see `skills/ui-client.md`
+1. Clone this repo.
+2. Read `docs/gdd-invariants.md`.
+3. Read `docs/gdd-logical-graph-grammar.md`.
+4. Read `CLAUDE.md`.
+5. Install PostgreSQL and Node.js if not already present.
+6. Run the bootstrap:
 
-The `bootstrap/` directory contains the founding scripts — schema, enums, tables, and all intent definitions with actionable `build_instructions`. After bootstrap, the graph is the source of build instructions. The skill files in `skills/` are reference material (vocabulary, conventions, design philosophy). The LLM reads from here but builds in a separate directory created by the bootstrap.
+```bash
+cd bootstrap
+npm install
+GDD_DB_PASSWORD=yourpassword node run.js
+```
 
-## Requirements
+For non-interactive use, set:
 
-- PostgreSQL (the graph stores all state in PostgreSQL)
-- Node.js (the system is built in JavaScript with Express)
+```text
+GDD_DB_NAME
+GDD_SCHEMA_NAME
+GDD_BUILD_DIR
+```
+
+The bootstrap creates the database, schema, enums, tables, root intent, current self-hosting intents, the `gdd-system` graph, and the build folder.
+
+## Important distinction
+
+Do not treat PostgreSQL, Node, Express, MCP, the current schema, or the current bootstrap order as invariants.
+
+They are expression-layer choices in the current reference expression. A future LLM-human situation may produce a different graph-driven system if it preserves the invariants and can explain its departures from prior expressions.
+
+## Requirements for the current reference expression
+
+- PostgreSQL
+- Node.js
 - A frontier LLM capable of reading instructions and writing code
+
+These requirements apply to the current reference expression, not to all possible GDD systems.
 
 ## Community feedback
 
-The [Discussions](https://github.com/kentyler/GraphDrivenDevelopmentInstaller/discussions) page collects build reports from different models and environments. If you run a build, consider posting what worked and where the instructions were unclear. Gap nodes — places where the skill files weren't precise enough — are especially valuable.
+The [Discussions](https://github.com/kentyler/GraphDrivenDevelopmentInstaller/discussions) page collects build reports from different models and environments. If you run a build, consider posting what worked and where the instructions were unclear.
+
+Gap nodes — places where the skill files were not precise enough — are especially valuable.
 
 See `skills/community.md` for optional automated reporting.
 

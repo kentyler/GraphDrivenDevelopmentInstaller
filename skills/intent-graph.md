@@ -1,3 +1,17 @@
+# Status note
+
+This skill file describes the current intent-graph reference expression. Read it after `docs/gdd-invariants.md` and `docs/gdd-logical-graph-grammar.md`.
+
+Do not treat the node model, table model, or bootstrap structure in this file as the constitutional form of GDD. They are current expression-layer choices. The logical grammar is the bridge between the invariants and any concrete schema.
+
+Important current framing:
+- a graph may project multiple systems
+- a working system may retro-project into multiple possible graphs
+- reverse engineering is not requirements extraction
+- migration is `old system → retro-projected graph(s) → selected board → new system expression`
+
+---
+
 # Intent Graph
 
 You are building a graph-driven development system. The intent graph is the central data structure -- it represents what needs to exist, what depends on what, what "done" looks like, and what has been expressed (implemented). Every participant in the system -- human, LLM agent, client, external force -- interacts through this graph.

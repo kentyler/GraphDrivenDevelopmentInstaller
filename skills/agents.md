@@ -1,3 +1,11 @@
+# Status note
+
+This skill file describes agents in the current reference expression. Read it under the governing invariant: agents are players, not owners.
+
+An agent's private memory, plan, scratchpad, chain of thought, or tool execution state is not the source of truth. What matters constitutionally is what the agent inscribes in the graph. Agent frameworks are expression-layer choices.
+
+---
+
 # Agents
 
 Agents are named, scoped, trust-bounded autonomous actors. Their definitions live in the `gdd.agents` table — persistent, queryable, part of the graph's operational state.

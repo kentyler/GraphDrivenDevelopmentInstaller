@@ -1,6 +1,58 @@
 # GDD
 
-Graph-Driven Development. The intent graph is the source of truth for this project.
+Graph-Driven Development.
+
+The intent graph is the source of truth for a graph-driven system, but this repository is not itself the canonical GDD application. This repository contains instructions, constitutional documents, grammar documents, and a current reference expression.
+
+## Governing document order
+
+Before building or modifying anything, read in this order:
+
+1. `docs/gdd-invariants.md` — constitutional layer. These constraints govern all faithful GDD expressions.
+2. `docs/gdd-logical-graph-grammar.md` — second-layer grammar. This translates invariants into graph vocabulary without choosing a storage substrate.
+3. `docs/gdd-conformance-checklist.md` — practical checklist for evaluating candidate expressions.
+4. `INTRODUCTION.md` — conceptual orientation.
+5. The current `skills/` and `bootstrap/` files — reference material for the current PostgreSQL/Node/MCP expression.
+
+If a current implementation file conflicts with the invariants, preserve the invariant and record the conflict as a gap, decision, or proposed supersession. Do not silently force the invariant into the current implementation.
+
+## Expression-layer warning
+
+PostgreSQL, Node, Express, MCP, the current schema, the current bootstrap order, and current table names are expression-layer choices unless explicitly marked otherwise.
+
+When making any change, ask:
+
+```text
+Am I preserving an invariant, implementing the grammar, or copying the current reference expression?
+```
+
+The current implementation is useful because it is concrete. It is not canonical.
+
+## Projection and retro-projection
+
+A graph can make a system; a system can suggest many graphs.
+
+Do not treat migration or reverse engineering as direct translation:
+
+```text
+old system → new system
+```
+
+Use the graph-mediated model:
+
+```text
+old system → retro-projected graph(s) → selected board → new system expression
+```
+
+Reverse engineering an existing system or application means retro-projecting one or more possible intent graphs from working artifacts: code, schema, forms, reports, workflows, permissions, user habits, and operational conventions. It is not extraction of one true requirements graph.
+
+## Agent stance
+
+Agents are players, not owners.
+
+An LLM agent may read projections, reason over unresolved intents, create gaps, propose or record expressions, add refinements, test candidate satisfactions, communicate with peer graphs, or render projections for other actors. Its authority is defined by scope, trust, mode, and verification constraints.
+
+An agent's private memory, plan, scratchpad, chain of thought, or tool execution state is not the source of truth. What matters constitutionally is what the agent inscribes.
 
 ## First run
 

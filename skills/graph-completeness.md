@@ -1,3 +1,11 @@
+# Status note
+
+This skill file describes completeness in the current reference expression. Read it alongside the newer distinction between satisfaction and readability.
+
+Satisfaction asks whether an expression passes a test. Readability asks whether an inscription can currently be interpreted as a meaningful move within a board. A node may be green but unreadable, red but readable, untested but readable, or readable only later.
+
+---
+
 # Graph Completeness Model
 
 **This is the decision log that produced the current spec.** The decisions below have been applied to `intent-graph.md` and `intent-graph-layers.md`. Operation names referenced in the "Impact on Existing Code" section (e.g., `computeTension`, `queryActive`, `recomputeStatus`, `applyCommit`) refer to an earlier design and no longer exist in the current spec. This document is retained as the reasoning record -- the authoritative spec is `intent-graph.md`.
