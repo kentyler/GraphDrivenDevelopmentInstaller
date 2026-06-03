@@ -4,6 +4,10 @@ This skill file describes agents in the current reference expression. Read it un
 
 An agent's private memory, plan, scratchpad, chain of thought, or tool execution state is not the source of truth. What matters constitutionally is what the agent inscribes in the graph. Agent frameworks are expression-layer choices.
 
+## Agent definitions vs. actor inscriptions
+
+The `gdd.agents` table defines LLM agent automation (scope, trust, trigger, activation). Actor inscriptions (node type `actor`) are broader -- they record the existence and participation constraints of any kind of actor (human, system, test runner, external force). An agent definition implies an actor, but not every actor is an automated agent. The `record_actor` MCP tool creates actor inscriptions; `define_agent` creates agent definitions.
+
 ---
 
 # Agents

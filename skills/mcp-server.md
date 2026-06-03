@@ -286,6 +286,27 @@ Expand an edge node by creating a new gap that represents a specific facet of th
 - **Input**: `{ edge_node_id: string, gap_name: string, gap_notes: string, description?: string, created_by?: string }`
 - **Maps to**: `expandEdgeNode`
 
+### record_actor
+
+Record an actor as a graph inscription. Actors include humans, LLM agents, systems, test runners, external forces -- any entity that can produce inscriptions. This is distinct from `gdd.agents` which defines LLM agent automation. Actor nodes inscribe the existence and participation constraints of any kind of actor.
+
+- **Input**: `{ id?: string, name: string, description?: string, actor_kind: string, scope?: string, trust_level?: string, mode?: string }` -- actor_kind is human/llm-agent/system/test-runner/external; scope/trust_level/mode stored in artifacts JSONB
+- **Maps to**: `recordActor`
+
+### record_commentary
+
+Record interpretive commentary on a graph inscription. Commentary does not change satisfaction status -- it is interpretive, not operational. Uses `comments-on` edges.
+
+- **Input**: `{ name: string, content: string, target_node_id: string, board_id?: string, actor?: string }`
+- **Maps to**: `recordCommentary`
+
+### query_commentary
+
+Return commentary nodes, optionally filtered by target node or board.
+
+- **Input**: `{ node_id?: string, board_id?: string }`
+- **Maps to**: `queryCommentary`
+
 ### record_projection
 
 Record a projection as a graph inscription -- the act of projecting a graph region into an expression, system, or view. A graph can make a system; a system can suggest many graphs. Projection is not deterministic.
