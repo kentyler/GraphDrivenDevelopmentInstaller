@@ -204,10 +204,17 @@ Record a tension signal on a board. Tension readings are observations of frictio
 
 ### assign_node_to_board
 
-Assign an existing graph node (intent, gap, decision, etc.) to a board.
+Assign an existing graph node (intent, gap, decision, etc.) to a board. A node can participate in multiple boards. The first assignment also sets the node's primary board_id if unset.
 
 - **Input**: `{ node_id: string, board_id: string }`
-- **Maps to**: `assignNodeToBoard`
+- **Maps to**: `assignNodeToBoard` (inserts into `gdd.node_board_memberships`)
+
+### query_board_nodes
+
+List all nodes participating in a board (via memberships or primary board_id).
+
+- **Input**: `{ board_id: string, type?: string }`
+- **Maps to**: `queryBoardNodes`
 
 ### query_board_axioms
 

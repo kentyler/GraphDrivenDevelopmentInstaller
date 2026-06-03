@@ -23,7 +23,8 @@ const systemNodeIds = [
   'op-query-graph-nodes', 'op-node-graphs',
 
   // Layer 1: Board/edge operations (from 009)
-  'op-create-board', 'op-create-edge-node', 'op-convert-gap-to-edge',
+  'op-create-board', 'op-assign-node-to-board', 'op-query-board-nodes',
+  'op-create-edge-node', 'op-convert-gap-to-edge',
   'op-expand-edge-node', 'op-record-sensitivity', 'op-record-tension',
 
   // Layer 2: Projection (from 004)

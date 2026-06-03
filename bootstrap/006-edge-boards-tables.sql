@@ -58,5 +58,12 @@ CREATE TABLE gdd.conversion_events (
   failed_articulation_attempts TEXT[]
 );
 
--- Add board_id to existing nodes table
+-- Add board_id to existing nodes table (primary board -- backward compatible)
 ALTER TABLE gdd.nodes ADD COLUMN IF NOT EXISTS board_id TEXT REFERENCES gdd.boards(id);
+
+-- Many-to-many node-board participation (grammar: nodes can participate in multiple boards)
+CREATE TABLE gdd.node_board_memberships (
+  node_id TEXT NOT NULL REFERENCES gdd.nodes(id),
+  board_id TEXT NOT NULL REFERENCES gdd.boards(id),
+  UNIQUE(node_id, board_id)
+);
