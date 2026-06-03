@@ -286,6 +286,34 @@ Expand an edge node by creating a new gap that represents a specific facet of th
 - **Input**: `{ edge_node_id: string, gap_name: string, gap_notes: string, description?: string, created_by?: string }`
 - **Maps to**: `expandEdgeNode`
 
+### record_projection
+
+Record a projection as a graph inscription -- the act of projecting a graph region into an expression, system, or view. A graph can make a system; a system can suggest many graphs. Projection is not deterministic.
+
+- **Input**: `{ name: string, description?: string, board_id?: string, purpose: string, audience: string, register: string, source_intent_ids?: string, artifacts: string }` -- audience is human/llm/system; register is narrative/structured/technical; source_intent_ids is comma-separated; artifacts is JSON string of the projected output
+- **Maps to**: `recordProjection`
+
+### query_projections
+
+Return recorded projection inscriptions. Supports filtering by board, purpose, or audience.
+
+- **Input**: `{ board_id?: string, purpose?: string, audience?: string }`
+- **Maps to**: `queryProjections`
+
+### record_retro_projection
+
+Record a retro-projection -- a situated graph reading of an existing artifact or system. Reverse engineering is not extraction of one true graph; it is production of situated graph readings that can be compared, contested, refined, or superseded. Can optionally create inferred intents and gaps with `infers-*` edges.
+
+- **Input**: `{ name: string, description?: string, source_artifact: string, board_id?: string, confidence_notes?: string, inferred_intents?: string, inferred_gaps?: string }` -- source_artifact references what is being retro-projected; inferred_intents is JSON array of `[{name, description, test_condition}]`; inferred_gaps is JSON array of `[{name, notes}]`
+- **Maps to**: `recordRetroProjection`
+
+### query_retro_projections
+
+Return retro-projection inscriptions. Supports finding competing readings of the same artifact.
+
+- **Input**: `{ source_artifact?: string, board_id?: string }`
+- **Maps to**: `queryRetroProjections`
+
 ### select_working_intent
 
 Set the working intent(s) for the current session. Writes a file at `~/.claude/hooks/gdd-working-intent.json` that hooks and other tools can read to know what the actor is currently working on. Validates that all specified intents exist in the graph.
