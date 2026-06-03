@@ -22,6 +22,7 @@ CREATE TYPE gdd.node_type AS ENUM (
   'signal',
   'expression',
   'axiom',
+  'edge-node',
   -- Grammar inscription kinds (added for grammar conformance)
   'actor',
   'projection',

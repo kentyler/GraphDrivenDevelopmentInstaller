@@ -1,10 +1,6 @@
--- Edge nodes & boards: enums (type-edge-node-status, type-board-status, type-board-impact, type-tension-character)
-
-CREATE TYPE gdd.edge_node_status AS ENUM (
-  'active',
-  'expanded',
-  'converted'
-);
+-- Boards: enums (type-board-status, type-board-impact, type-tension-character)
+-- Edge node status enum removed: edge nodes are now gdd.nodes with type='edge-node'.
+-- Status is derived from topology (superseded, expanded via refines edges) or stored in artifacts.
 
 CREATE TYPE gdd.board_status AS ENUM (
   'active',

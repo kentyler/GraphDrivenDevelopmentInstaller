@@ -43,9 +43,9 @@ f5a0bc7  Phase 6: Portable graph package export/import
 
 1. ~~`queryIncomplete` defaults to whole-graph scope~~ **Resolved.** `queryIncomplete` now requires `board_id`, `graph_id`, or explicit `scope: "global"`. Unscoped queries are rejected. (Commit after v1 tag.)
 
-2. **Edge nodes isolated in separate table** -- edge nodes should eventually participate in the graph as graph-significant inscriptions, not supporting records. The `marks-edge` edge type is available but unusable until edge nodes can be endpoints in `gdd.edges`.
+2. ~~**Edge nodes isolated in separate table**~~ **Resolved.** Edge nodes are now ordinary `gdd.nodes` rows with type `'edge-node'`. The `gdd.edge_nodes` table has been removed. Content stored in `notes`, weight/created_by in `artifacts` JSONB. Related nodes linked via `marks-edge` edges. Edge nodes participate fully in the graph as first-class inscriptions.
 
-3. **Event tables vs. graph-as-its-own-history** -- `expansion_events` and `conversion_events` are a conceptual tension. Tolerable if treated as reference-expression audit aids, not the source of truth.
+3. ~~**Event tables vs. graph-as-its-own-history**~~ **Resolved.** `expansion_events` and `conversion_events` tables removed. Transitions are now expressed as graph topology: conversions use decision nodes with `closes` edges, expansions use gap nodes with `refines` edges. The graph is its own history.
 
 4. **`signals` edge available but unused** -- low risk. Good candidate for a small example or test later.
 

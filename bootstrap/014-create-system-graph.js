@@ -11,8 +11,8 @@ const systemNodeIds = [
   'type-node-type', 'type-edge-type', 'type-agent-trust', 'type-agent-status',
 
   // Layer 0: Board/edge infrastructure (from 009)
-  'table-boards', 'table-edge-nodes', 'table-sensitivity-readings', 'table-tension-readings',
-  'type-edge-node-status', 'type-board-status', 'type-board-impact', 'type-tension-character',
+  'table-boards', 'table-sensitivity-readings', 'table-tension-readings',
+  'type-board-status', 'type-board-impact', 'type-tension-character',
 
   // Layer 1: Core Operations (from 004)
   'op-create-intent', 'op-create-edge', 'op-record-expression', 'op-link-expression',

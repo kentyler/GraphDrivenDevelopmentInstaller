@@ -248,42 +248,42 @@ Return nodes on a board grouped by readability status: readable (has `makes-read
 
 ### create_edge_node
 
-Create an edge node -- a node representing something that resists clean articulation. Edge nodes live on a board and can relate to other graph nodes.
+Create an edge node -- a graph inscription representing something that resists clean articulation. Edge nodes are ordinary `gdd.nodes` rows with type `'edge-node'`. Content is stored in `notes`, weight and created_by in `artifacts` JSONB. Related nodes are linked via `marks-edge` edges. The node is assigned to the specified board via `node_board_memberships`.
 
-- **Input**: `{ name: string, board_id: string, id?: string, content?: string, related_nodes?: string, weight?: number, created_by?: string }` — related_nodes is a comma-separated string of node IDs (parsed to array server-side)
-- **Maps to**: `createEdgeNode`
+- **Input**: `{ name: string, board_id: string, id?: string, content?: string, related_nodes?: string, weight?: number, created_by?: string }` — related_nodes is a comma-separated string of node IDs; for each, a `marks-edge` edge is created from the edge node to the related node
+- **Maps to**: `createEdgeNode` (INSERT into `gdd.nodes` with type 'edge-node')
 
 ### query_edge_nodes
 
-List edge nodes, optionally filtered by board or status.
+List edge nodes, optionally filtered by board. Queries `gdd.nodes` where type = 'edge-node', joined with `node_board_memberships` when board_id is provided.
 
-- **Input**: `{ board_id?: string, status?: string }`
-- **Maps to**: `queryEdgeNodes`
+- **Input**: `{ board_id?: string }`
+- **Maps to**: `queryEdgeNodes` (SELECT from `gdd.nodes` WHERE type = 'edge-node')
 
 ### get_edge_node
 
-Full context for an edge node -- its details, sensitivity readings, and related nodes.
+Full context for an edge node -- its node details, sensitivity readings, and related nodes (via `marks-edge` edges).
 
 - **Input**: `{ id: string }`
-- **Maps to**: `getEdgeNode`
+- **Maps to**: `getEdgeNode` (SELECT from `gdd.nodes`, JOIN sensitivity_readings, JOIN edges WHERE edge_type = 'marks-edge')
 
 ### record_sensitivity_reading
 
-Record a sensitivity signal on an edge node. Sensitivity readings track how the edge node responds to changes or interactions elsewhere in the graph.
+Record a sensitivity signal on an edge node. Sensitivity readings track how the edge node responds to changes or interactions elsewhere in the graph. The edge_node_id references `gdd.nodes(id)`.
 
 - **Input**: `{ edge_node_id: string, signal: string, read_by?: string, board_impact?: string }`
-- **Maps to**: `recordSensitivityReading`
+- **Maps to**: `recordSensitivityReading` (INSERT into `gdd.sensitivity_readings`)
 
 ### convert_gap_to_edge
 
-Convert an existing gap node into an edge node. The gap remains in the graph; a new edge node is created on the specified board with the gap's context carried forward. Use when a gap resists resolution and the team recognizes it as a persistent edge phenomenon rather than a solvable problem.
+Convert an existing gap node into an edge node. Creates a new `gdd.nodes` row with type 'edge-node' on the specified board. The gap remains in the graph; a decision node with `closes` edge records the conversion, and a `marks-edge` edge links the new edge node to the original gap. Use when a gap resists resolution and the team recognizes it as a persistent edge phenomenon rather than a solvable problem.
 
 - **Input**: `{ gap_id: string, board_id: string, content?: string, description?: string, failed_articulation_attempts?: string, created_by?: string }` — failed_articulation_attempts is a pipe-separated string (parsed to array server-side)
 - **Maps to**: `convertGapToEdge`
 
 ### expand_edge_node
 
-Expand an edge node by creating a new gap that represents a specific facet of the edge's resistance. The gap is linked to the edge node. Use when an edge node's tension becomes partially articulable.
+Expand an edge node by creating a new gap that represents a specific facet of the edge's resistance. The gap is linked to the edge node via a `refines` edge (gap refines the edge node's territory). Use when an edge node's tension becomes partially articulable. No separate event table -- the gap + refines edge IS the expansion record.
 
 - **Input**: `{ edge_node_id: string, gap_name: string, gap_notes: string, description?: string, created_by?: string }`
 - **Maps to**: `expandEdgeNode`
