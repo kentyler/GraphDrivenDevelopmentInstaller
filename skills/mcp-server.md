@@ -335,6 +335,20 @@ Return retro-projection inscriptions. Supports finding competing readings of the
 - **Input**: `{ source_artifact?: string, board_id?: string }`
 - **Maps to**: `queryRetroProjections`
 
+### export_graph_package
+
+Export a graph or subgraph as a portable JSON package. The graph is the zip file; the application is one decompression. Intent graphs make applications portable across technologies, organizations, and LLM generations.
+
+- **Input**: `{ graph_id: string, include_superseded?: boolean, include_expressions?: boolean }` -- include_superseded defaults to false; include_expressions defaults to true
+- **Maps to**: `exportGraphPackage`
+
+### import_graph_package
+
+Import a portable graph package into the current instance. Supports merge strategies for ID conflict resolution. Wrapped in a transaction with optional dry-run.
+
+- **Input**: `{ package: string, merge_strategy?: string, dry_run?: boolean }` -- package is the JSON string; merge_strategy is create-new/skip-existing/error-on-conflict (default: skip-existing); dry_run defaults to false
+- **Maps to**: `importGraphPackage`
+
 ### select_working_intent
 
 Set the working intent(s) for the current session. Writes a file at `~/.claude/hooks/gdd-working-intent.json` that hooks and other tools can read to know what the actor is currently working on. Validates that all specified intents exist in the graph.
