@@ -115,7 +115,7 @@ This closes the structural evolution gap: nodes were already supersedable via `s
 
 ### 12. Axiom as seventh node kind
 
-Axioms are board-level constraints -- statements that govern how work proceeds within a board's scope. They are the seventh node kind alongside intent, gap, decision, signal, expression, and compose.
+Axioms are board-level constraints -- statements that govern how work proceeds within a board's scope. They are one of several non-intent inscription kinds alongside gap, decision, signal, expression, compose, test, edge-node, actor, projection, retro-projection, and commentary.
 
 An axiom node:
 - Requires `notes` and `board_id` (axioms are always board-scoped)
@@ -124,7 +124,7 @@ An axiom node:
 - Is supersedable through the normal `supersedes` edge mechanism when a governing constraint changes
 - Board boundaries are derived from axioms -- the `edge_statement` field (previously considered for boards) was removed in favor of axiom-based boundary definition
 
-Seven node kinds, seven test condition rules:
+Non-intent inscription kinds and their test condition rules:
 - **Intent nodes**: test condition optional (verifiable claim when present; untested/uncollapsed when absent)
 - **Gap nodes**: no test condition (that is what makes them gaps)
 - **Decision nodes**: no test condition (deliberation, not operation)
@@ -132,13 +132,19 @@ Seven node kinds, seven test condition rules:
 - **Expression nodes**: no test condition (artifacts, not requirements)
 - **Compose nodes**: structural test (all `contains` children satisfied)
 - **Axiom nodes**: no test condition (governing constraints, not testable claims)
+- **Test nodes**: no test condition (they ARE test conditions -- addressable via tested-by edges)
+- **Edge-node nodes**: no test condition (boundary markers, not operational work)
+- **Actor nodes**: no test condition (participation inscriptions)
+- **Projection nodes**: no test condition (situated graph readings)
+- **Retro-projection nodes**: no test condition (system-to-graph readings)
+- **Commentary nodes**: no test condition (interpretive annotations)
 
 ## Impact on Existing Code
 
 ### Must change
-- `createIntent`: accept optional `test_condition` for intent types (untested if null). Accept null for gaps, decisions, signals, expressions, compose. Expression nodes require `artifacts` JSONB.
+- `createIntent`: accept optional `test_condition` for intent types (untested if null). Accept null for gaps, decisions, signals, expressions, compose, test, axiom, edge-node, actor, projection, retro-projection, commentary. Expression nodes require `artifacts` JSONB.
 - `recordExpression`: now creates an expression node + optional `satisfies` edge(s), accepts optional `intent_ids[]` (empty = unlinked expression). No longer inserts into `gdd.expressions` table.
-- `queryIncomplete`: derive red/green from `satisfies` edges, not from `gdd.expressions`. Exclude expression nodes and axiom nodes from results.
+- `queryIncomplete`: derive red/green from `satisfies` edges, not from `gdd.expressions`. Include compose nodes (red when not all children green). Exclude non-workable node types (expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, edge-node) from results.
 - `buildProjection`: include expression nodes linked via `satisfies` edges. Accept optional `graph_id` for scoping via memberships. Filter out superseded edges (`superseded_by IS NULL`). Include edge descriptions in projections.
 - `clientSession` LLM prompt: remove "clients cannot create test conditions"; instead instruct: create intent with test if clear, create gap if not
 - `transduceExternal` LLM prompt: same routing -- intent with test or gap

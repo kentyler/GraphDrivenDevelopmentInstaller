@@ -57,6 +57,10 @@ const systemNodeIds = [
   'op-record-actor', 'op-record-commentary', 'op-query-commentary',
   'op-export-graph-package', 'op-import-graph-package',
 
+  // Test nodes and signal relations (from 004)
+  'op-create-test', 'op-query-tests',
+  'op-create-signal-relation', 'op-query-signals',
+
   // Root
   'gdd-root',
 ];

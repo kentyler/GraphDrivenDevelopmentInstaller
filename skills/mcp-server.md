@@ -36,7 +36,7 @@ Natural language entry point. The user says something; the LLM constructs the in
 
 ### query_incomplete
 
-What's red on a board or graph. Returns intents and gaps with no incoming satisfies edges (excluding expression, decision, signal, axiom, actor, projection, retro-projection, and commentary nodes). Supports a workable filter to return only red intents whose dependencies are all green.
+What's red on a board or graph. Returns intents, gaps, and compose nodes with no incoming satisfies edges (excluding expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, and edge-node nodes). Compose nodes use derived green status: green when all `contains` children are green. Supports a workable filter to return only red intents whose dependencies are all green.
 
 **Scope is required.** At least one of `board_id`, `graph_id`, or `scope: "global"` must be provided. No one plays the whole graph -- unscoped queries are rejected. Use `scope: "global"` as an explicit opt-in for whole-graph diagnostic queries.
 
@@ -164,7 +164,7 @@ Find expression nodes that have no satisfies edges to any intent. These are "pro
 
 ### create_edge
 
-Create an edge between two nodes. Supports all edge types (blocked-by, satisfies, closes, tensions-with, supersedes, contains, refines).
+Create an edge between two nodes. Supports all 27 edge types including the original 7 (blocked-by, satisfies, closes, tensions-with, supersedes, contains, refines) and grammar relation kinds (tested-by, signals, infers-intent, infers-test, infers-gap, comments-on, etc.).
 
 - **Input**: `{ from_node: string, to_node: string, edge_type: string, description?: string, created_by?: string }`
 - **Maps to**: `createEdge`
@@ -175,6 +175,34 @@ Replace an existing edge with a new one. The old edge remains in the graph as hi
 
 - **Input**: `{ old_edge_id: string, from_node?: string, to_node?: string, edge_type?: string, description?: string, created_by?: string }`
 - **Maps to**: `supersedeEdge`
+
+### create_test
+
+Create a test node and link it to intents via tested-by edges. Makes tests addressable as first-class graph citizens rather than only embedded fields on intents.
+
+- **Input**: `{ name: string, condition: string, intent_ids: string, verification?: string, scope?: string, id?: string, board_id?: string }` -- intent_ids is a comma-separated string of node IDs (parsed to array server-side); condition is the test condition text; verification is how to check; scope describes what the test covers
+- **Maps to**: `createTest`
+
+### query_tests
+
+Query test nodes, optionally filtered by the intent they test or by board.
+
+- **Input**: `{ intent_id?: string, board_id?: string }` -- intent_id filters to tests with tested-by edges to that intent
+- **Maps to**: `queryTests`
+
+### create_signal_relation
+
+Create a signal node and signals edges to target nodes. The first inscription for an uncertain observation -- reception before interpretation. Unlike transduceExternal, this does not interpret the signal into intents or gaps.
+
+- **Input**: `{ name: string, source: string, observed_content: string, target_ids: string, description?: string, id?: string, board_id?: string }` -- target_ids is a comma-separated string of node IDs; source is where the observation came from; observed_content is the raw observation
+- **Maps to**: `createSignalRelation`
+
+### query_signals
+
+Query signal nodes with their signals edge targets, optionally filtered by target node, board, or source.
+
+- **Input**: `{ target_node_id?: string, board_id?: string, source?: string }`
+- **Maps to**: `querySignals`
 
 ### create_board
 

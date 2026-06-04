@@ -12,7 +12,7 @@ Founding decisions (PostgreSQL, Express, MCP SDK, etc.) inscribed as already-gre
 
 ### Layer 0: Foundation -- Schema and Core Types
 
-Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics. The board infrastructure tables (boards, sensitivity_readings, tension_readings) carry temporal metadata (created_at, read_at) because they are accumulating observation records, not graph topology -- readings are time-series data by nature. Edge nodes are ordinary `gdd.nodes` rows with type `'edge-node'` -- no separate table. Their lifecycle (conversion, expansion) is expressed through graph topology (decisions with `closes` edges, gaps with `refines` edges).
+Note: The two core graph tables (nodes, edges) and the graph_memberships join table carry no temporal metadata -- no `created_at`, no `created_by`. The graph's history is its topology (supersession chains, closed gaps, satisfies edges from expression nodes), not timestamps. The graphs table carries `created_at` as administrative metadata (when the graph identity was established). The three operational tables (agents, skills, llm_providers) also carry `created_at` -- these are configuration and registry tables, not graph elements, and their creation time is useful administrative metadata that does not contradict the graph's write-only semantics. The board infrastructure tables (boards, sensitivity_readings, tension_readings) carry temporal metadata (created_at, read_at) because they are accumulating observation records, not graph topology -- readings are time-series data by nature. Edge nodes are ordinary `gdd.nodes` rows with type `'edge-node'` -- no separate table. Their lifecycle (conversion, expansion) is expressed through graph topology (decisions with `closes` edges, gaps with `refines` edges). Test nodes (type `'test'`) are also ordinary `gdd.nodes` rows -- they make test conditions addressable as first-class graph citizens, targetable by `tested-by`, `infers-test`, commentary, and refinement edges.
 
 ```json
 [
@@ -104,11 +104,11 @@ Note: The two core graph tables (nodes, edges) and the graph_memberships join ta
     "id": "type-node-type",
     "type": "define-type",
     "name": "Node type enum",
-    "description": "All node types from the fixed vocabulary. Schema types: define-table, define-type, define-schema. Operation types: implement-operation, implement-endpoint, implement-traversal, implement-projection, implement-mutation. Integration types: integrate, derive, translate. Constraint types: constrain-permission, constrain-invariant. Structural types: establish-convention, define-vocabulary, compose. Plus: gap, decision, signal, expression, axiom. The system derives the base category from the type value: compose, gap, decision, signal, expression, and axiom are their own categories; everything else is an intent (has a test condition, can be red/green, can be satisfied by expressions). Axiom nodes are board-level constraints -- foundational claims that shape the design space.",
+    "description": "All node types from the fixed vocabulary. Schema types: define-table, define-type, define-schema. Operation types: implement-operation, implement-endpoint, implement-traversal, implement-projection, implement-mutation. Integration types: integrate, derive, translate. Constraint types: constrain-permission, constrain-invariant. Structural types: establish-convention, define-vocabulary, compose. Meta: gap, decision, signal, expression, axiom. Edge phenomena: edge-node. Grammar inscription kinds: actor, projection, retro-projection, commentary, test. The system derives the base category from the type value: compose, gap, decision, signal, expression, axiom, test, edge-node, actor, projection, retro-projection, and commentary are their own categories; everything else is an intent (has a test condition, can be red/green, can be satisfied by expressions).",
     "type_name": "gdd.node_type",
-    "values": ["define-table", "define-type", "define-schema", "implement-operation", "implement-endpoint", "implement-traversal", "implement-projection", "implement-mutation", "integrate", "derive", "translate", "constrain-permission", "constrain-invariant", "establish-convention", "define-vocabulary", "compose", "gap", "decision", "signal", "expression", "axiom"],
+    "values": ["define-table", "define-type", "define-schema", "implement-operation", "implement-endpoint", "implement-traversal", "implement-projection", "implement-mutation", "integrate", "derive", "translate", "constrain-permission", "constrain-invariant", "establish-convention", "define-vocabulary", "compose", "gap", "decision", "signal", "expression", "axiom", "edge-node", "actor", "projection", "retro-projection", "commentary", "test"],
     "test": {
-      "condition": "Enum type exists in database with all 21 values from the fixed vocabulary",
+      "condition": "Enum type exists in database with all 27 values from the fixed vocabulary",
       "verification": "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'gdd.node_type'::regtype"
     }
   },
@@ -301,15 +301,15 @@ These intents are all `blocked-by` the foundation tables.
     "id": "op-query-incomplete",
     "type": "implement-traversal",
     "name": "Query incomplete intents",
-    "description": "Return all intent nodes that are red (no incoming satisfies edge) and current (not superseded). Expression nodes, decision nodes, signal nodes, and axiom nodes are excluded -- expression nodes are artifacts (neither red nor green), decision nodes are deliberation records, signal nodes are raw events (already happened), and axiom nodes are board-level constraints (not operational work). Gap nodes ARE included -- they are detected blockers that need resolution. This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Compose nodes are green when all their contains children are green. Supports board_id filter to scope results to a specific board. Ordered by downstream dependent count desc.",
+    "description": "Return all intent and compose nodes that are red and current (not superseded). For intents: red means no incoming satisfies edge. For compose: red means not all contains children are green. Gap nodes ARE included. Excluded node types: expression (artifacts), decision (deliberation records), signal (raw events), test (structural inscriptions), axiom (board constraints), actor (participation records), projection (readings), retro-projection (situated readings), commentary (interpretive annotations), edge-node (boundary markers). This is the primary entry point for 'what should I work on next?' Supports a 'workable' filter: when set, returns only red intents whose blocked-by dependencies are all green (have incoming satisfies edges). Supports board_id filter to scope results to a specific board. Ordered by downstream dependent count desc.",
     "traversal_name": "queryIncomplete",
     "start": "Global graph",
-    "pattern": "Filter for current nodes (no supersedes edge pointing at them) with no incoming satisfies edge (red). Exclude expression nodes, decision nodes, signal nodes, and axiom nodes. Include gap nodes. Optional workable filter checks blocked-by edges. Optional board_id filter scopes to a board. Order by downstream dependent count desc.",
+    "pattern": "Filter for current nodes (no supersedes edge pointing at them) that are red. For intents/gaps: no incoming satisfies edge. For compose: not all contains children green. Exclude expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, and edge-node nodes. Include gap and compose nodes. Optional workable filter checks blocked-by edges. Optional board_id filter scopes to a board. Order by downstream dependent count desc.",
     "returns": "Array of red intent nodes with their downstream dependent counts",
     "blocked_by": ["op-create-intent", "op-create-edge"],
     "test": {
-      "condition": "Returns only red, current intents and gaps (no incoming satisfies edge, not superseded). Does not return green intents (have incoming satisfies edges). Does not return superseded intents. Does not return expression nodes, decision nodes, signal nodes, or axiom nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. With board_id filter: returns only nodes whose board_id matches. Ordered by downstream dependent count desc.",
-      "verification": "Integration test: create intents with and without incoming satisfies edges, with and without satisfied dependencies, with and without supersession. Verify filtered and unfiltered queries. Test compose node green derivation. Verify expression nodes and axiom nodes are excluded from results. Test board_id scoping."
+      "condition": "Returns only red, current intents, gaps, and compose nodes (not superseded). Intents/gaps are red when they have no incoming satisfies edge. Compose nodes are red when not all contains children are green. Does not return green intents or green compose nodes. Does not return superseded intents. Does not return expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, or edge-node nodes. With workable filter: intent A (red, all deps green) is returned, intent B (red, has a red dep) is not. Without workable filter: both A and B are returned. Compose node with all children green is itself green and not returned. With board_id filter: returns only nodes whose board_id matches. Ordered by downstream dependent count desc.",
+      "verification": "Integration test: create intents with and without incoming satisfies edges, with and without satisfied dependencies, with and without supersession. Verify filtered and unfiltered queries. Test compose node: red when children not all green, green when all children green. Verify excluded node types (expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, edge-node) do not appear in results. Test board_id scoping."
     }
   },
   {
@@ -685,6 +685,64 @@ These intents are all `blocked-by` the foundation tables.
     "test": {
       "condition": "Returns nodes matching the id prefix. Does not return superseded nodes.",
       "verification": "Integration test: create nodes, supersede one, query by prefix, verify superseded node excluded."
+    }
+  },
+  {
+    "id": "op-create-test",
+    "type": "implement-operation",
+    "name": "Create test node",
+    "description": "Create a test node (type='test') and link it to intents via tested-by edges. Makes tests addressable as first-class graph citizens rather than only embedded fields. Test nodes carry condition/verification/scope in artifacts JSONB and condition in notes. Optionally backfills the intent's embedded test_condition field if currently null (backward compatibility).",
+    "operation_name": "createTest",
+    "input": "name, condition (text), intent_ids[] (required), verification (optional), scope (optional), id (optional), board_id (optional)",
+    "output": "{ test_node, edges[] }",
+    "blocked_by": ["op-create-intent", "op-create-edge"],
+    "test": {
+      "condition": "Creates test node with type='test'. Creates tested-by edges from test to each intent. Optionally backfills intent's test_condition. Test node excluded from queryIncomplete.",
+      "verification": "Integration test: create test linked to intent, verify tested-by edge, verify optional backfill, verify exclusion from queryIncomplete."
+    }
+  },
+  {
+    "id": "op-query-tests",
+    "type": "implement-traversal",
+    "name": "Query test nodes",
+    "description": "Return test nodes, optionally filtered by the intent they cover (via tested-by edges) or by board.",
+    "traversal_name": "queryTests",
+    "start": "gdd.nodes WHERE type='test'",
+    "pattern": "Filter by tested-by edge target or board_id",
+    "returns": "Array of test nodes with tested-by targets",
+    "blocked_by": ["op-create-test"],
+    "test": {
+      "condition": "Returns test nodes. Filterable by intent_id (tests with tested-by edge to that intent) and board_id.",
+      "verification": "Integration test: create tests on multiple intents, query by intent and board."
+    }
+  },
+  {
+    "id": "op-create-signal-relation",
+    "type": "implement-operation",
+    "name": "Create signal relation",
+    "description": "Create a signal node and signals edges to target nodes. The first inscription for an uncertain observation -- reception before interpretation. Unlike transduceExternal, this does not interpret the signal into intents or gaps. The signal persists regardless of any subsequent transduction.",
+    "operation_name": "createSignalRelation",
+    "input": "name, source (text), observed_content (text), target_ids[] (required), description (optional), id (optional), board_id (optional)",
+    "output": "{ signal_node, edges[] }",
+    "blocked_by": ["op-create-intent", "op-create-edge"],
+    "test": {
+      "condition": "Creates signal node with type='signal'. Creates signals edges from signal to each target. Signal excluded from queryIncomplete.",
+      "verification": "Integration test: create signal relation to intent, verify signals edge, verify exclusion from queryIncomplete."
+    }
+  },
+  {
+    "id": "op-query-signals",
+    "type": "implement-traversal",
+    "name": "Query signal relations",
+    "description": "Return signal nodes with their signals edges, optionally filtered by target node, board, or source.",
+    "traversal_name": "querySignals",
+    "start": "gdd.nodes WHERE type='signal'",
+    "pattern": "Filter by signals edge target, board_id, or source in artifacts",
+    "returns": "Array of signal nodes with signals edge targets",
+    "blocked_by": ["op-create-signal-relation"],
+    "test": {
+      "condition": "Returns signal nodes. Filterable by target_node_id (signals with signals edge to that node), board_id, and source.",
+      "verification": "Integration test: create signals to multiple targets, query by target and source."
     }
   }
 ]
@@ -1074,6 +1132,10 @@ op-convert-gap-to-edge                                          ->  (blocked-by)
 op-expand-edge-node                                             ->  (blocked-by)    ->  op-create-edge-node, op-create-gap
 op-query-unlinked                                               ->  (blocked-by)    ->  op-record-expression
 op-query-current-nodes                                          ->  (blocked-by)    ->  op-create-intent
+op-create-test                                                  ->  (blocked-by)    ->  op-create-intent, op-create-edge
+op-query-tests                                                  ->  (blocked-by)    ->  op-create-test
+op-create-signal-relation                                       ->  (blocked-by)    ->  op-create-intent, op-create-edge
+op-query-signals                                                ->  (blocked-by)    ->  op-create-signal-relation
 table-boards                                                    ->  (blocked-by)    ->  foundation-tables
 table-sensitivity-readings                                      ->  (blocked-by)    ->  foundation-tables, table-boards
 table-tension-readings                                          ->  (blocked-by)    ->  table-boards

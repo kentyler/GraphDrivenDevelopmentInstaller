@@ -27,7 +27,8 @@ CREATE TYPE gdd.node_type AS ENUM (
   'actor',
   'projection',
   'retro-projection',
-  'commentary'
+  'commentary',
+  'test'
 );
 
 CREATE TYPE gdd.edge_type AS ENUM (

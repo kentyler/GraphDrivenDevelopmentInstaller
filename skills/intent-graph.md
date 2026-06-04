@@ -102,8 +102,8 @@ Its test condition is structural: all children are green — the schema exists, 
 
 An intent graph has two structural elements:
 
-1. **Nodes** — seven kinds: intents (what needs to exist), compose (structural grouping), gaps (detected blockers), decisions (authored closures), signals (external events), expressions (concrete artifacts produced), and axioms (board-level constraints). See Intent Types below for the full vocabulary.
-2. **Edges** — seven types of directed relationships between nodes: dependency (`blocked-by`), composition (`contains`), tension (`tensions-with`), refinement (`refines`), supersession (`supersedes`), resolution (`closes`), and satisfaction (`satisfies`). See Edge Types below.
+1. **Nodes** — inscription kinds: intents (what needs to exist), compose (structural grouping), gaps (detected blockers), decisions (authored closures), signals (external events), expressions (concrete artifacts produced), axioms (board-level constraints), tests (addressable test conditions), edge-nodes (edge phenomena), actors (participation inscriptions), projections (graph-to-system readings), retro-projections (system-to-graph readings), and commentary (interpretive annotations). See Intent Types below for the full vocabulary.
+2. **Edges** — 27 relation types including the core 7: dependency (`blocked-by`), composition (`contains`), tension (`tensions-with`), refinement (`refines`), supersession (`supersedes`), resolution (`closes`), satisfaction (`satisfies`), plus grammar relation kinds (`tested-by`, `signals`, `infers-intent`, `infers-test`, `comments-on`, etc.). See Edge Types below.
 
 Intents carry test conditions — the verifiable claim of what must be true when the intent is satisfied. Expressions are nodes connected to intents via `satisfies` edges — one expression can satisfy multiple intents, and one intent can be satisfied by multiple expressions.
 
@@ -271,7 +271,7 @@ An expression is not an intent -- it has no test condition because it is the art
 
 An expression can also exist without any `satisfies` edges -- an "unlinked" expression. This records production without claiming satisfaction: "I built this, but I'm not yet asserting which intents it satisfies." The LLM links it later via `linkExpression` when it has enough understanding to make that claim. Unlinked expressions are queryable via `GET /api/unlinked` (or `query_unlinked` MCP tool).
 
-Expression nodes are neither red nor green. They are artifacts, not requirements. They do not appear in `queryIncomplete` results (along with compose, decision, signal, and axiom nodes). Their role is purely structural: they connect to intents via `satisfies` edges, and those edges determine which intents are green.
+Expression nodes are neither red nor green. They are artifacts, not requirements. They do not appear in `queryIncomplete` results (along with decision, signal, test, axiom, actor, projection, retro-projection, commentary, and edge-node nodes). Compose nodes DO appear in `queryIncomplete` when they are red (not all children green). Their role is purely structural: they connect to intents via `satisfies` edges, and those edges determine which intents are green.
 
 ### Signal type
 
@@ -316,6 +316,28 @@ Axiom node structure:
 An axiom is not an intent -- it has no test condition because it is a hypothesis, not a requirement to verify. It is a board-level constraint: a claim about the shape of the problem space that the board operates within. Board boundaries are derived from axioms, not proclaimed -- the set of current (non-superseded) axioms on a board defines what the board takes as given. Axioms are supersedable like any other node: when understanding changes, create a new axiom with a `supersedes` edge to the old one. The old axiom remains in the graph as history.
 
 Axiom nodes are neither red nor green. They do not appear in `queryIncomplete` results. Their role is to provide context to actors working within a board -- `buildProjection` includes the board's current axioms when the vantage node has a `board_id`.
+
+### Test type
+
+| Type | Meaning | Key fields |
+|------|---------|------------|
+| `test` | An addressable test condition -- makes tests first-class graph citizens, targetable by `tested-by`, `infers-test`, commentary, and refinement edges. | `name`, `condition` (in notes and artifacts), `verification` (optional), `scope` (optional), `intent_ids[]` (linked via `tested-by` edges) |
+
+Test node structure:
+
+```json
+{
+  "id": "string -- unique identifier",
+  "type": "test",
+  "name": "string -- short description of the test",
+  "notes": "string -- the test condition text",
+  "artifacts": "JSONB -- { condition, verification, scope }"
+}
+```
+
+A test node is not an intent -- it has no test condition of its own because it IS a test condition. It makes tests addressable: retro-projections can create `infers-test` edges to test nodes, commentary can annotate them, refinement can specialize them. The `tested-by` edge (test -> intent) connects a test to the intents it covers. One test can cover multiple intents, and one intent can have multiple tests.
+
+Test nodes are neither red nor green. They do not appear in `queryIncomplete` results. They do not change satisfaction status -- an intent turns green through `satisfies` edges from expressions, not through `tested-by` edges from tests. The embedded `test_condition`/`test_verification` fields on intents remain as backward-compatible summaries; `op-create-test` optionally backfills them.
 
 ## Edge Types
 
@@ -417,7 +439,7 @@ A sound sequence. **Each step has a gate — do not proceed to the next step unt
 2. **Core graph writes.** `createIntent` (test_condition optional), `recordExpression` (creates expression node + optional satisfies edges), `createGap`, `createDecision`, `createEdge`. Verify DB state after each call.
    — GATE: each operation inserts correct rows, edges reference valid nodes, expression nodes carry artifacts. Untested intents and unlinked expressions are valid states. Do not build reads yet.
 3. **Core graph reads.** `queryIncomplete`, `buildProjection`, `traverseDependencies`. Test against small hand-built graph fixtures.
-   — GATE: queryIncomplete returns only red, non-superseded intents (excluding compose, expression, decision, signal, axiom). buildProjection returns correct dependency subgraph and includes board context (board, axioms, edge nodes) when the vantage node has a board_id. traverseDependencies walks edges in both directions. Do not expose HTTP yet.
+   — GATE: queryIncomplete returns only red, non-superseded intents and compose nodes (excluding expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, edge-node). Compose nodes are red when not all `contains` children are green. buildProjection returns correct dependency subgraph and includes board context (board, axioms, edge nodes) when the vantage node has a board_id. traverseDependencies walks edges in both directions. Do not expose HTTP yet.
 4. **HTTP admin surface.** Expose stable endpoints for the above. No MCP yet.
    — GATE: every operation is callable via REST and returns correct results. Do not add LLM operations yet.
 5. **Provider resolution.** Implement `gdd.llm_providers`. Prove both "no active provider" (501) and "active provider exists" paths.
@@ -506,7 +528,7 @@ The self-hosting claim requires a concrete bootstrap sequence. The system must e
 
 Any actor — human, LLM agent, client, or external force — follows the same protocol. The loop is the loop.
 
-1. **Find what's red.** Run `queryIncomplete` -- it returns all intents and gaps that have no incoming satisfies edge (red) and are current (not superseded). Compose, expression, decision, signal, and axiom nodes are excluded. Start with the one that unblocks the most downstream work.
+1. **Find what's red.** Run `queryIncomplete` -- it returns all intents, gaps, and compose nodes that are red and current (not superseded). For intents and gaps, red means no incoming satisfies edge. For compose nodes, red means not all `contains` children are green. Expression, decision, signal, test, axiom, actor, projection, retro-projection, commentary, and edge-node nodes are excluded. Start with the one that unblocks the most downstream work.
 
 2. **Read the projection.** Before working on an intent, build its projection. This gives you the full context: what it depends on, what it enables, what its test condition requires. For an LLM actor, `renderLLM` produces the dense structured form that makes this context directly navigable.
 

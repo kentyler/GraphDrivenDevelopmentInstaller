@@ -72,15 +72,9 @@ If the database doesn't exist yet:
    SELECT n.id, n.name, n.build_instructions
    FROM gdd.nodes n
    JOIN gdd.graph_memberships gm ON gm.node_id = n.id AND gm.graph_id = 'gdd-system'
-   WHERE n.type NOT IN ('expression', 'decision', 'signal')
-   AND n.id NOT IN (
-     SELECT e.to_node FROM gdd.edges e
-     WHERE e.edge_type = 'satisfies' AND e.superseded_by IS NULL
-   )
-   AND NOT EXISTS (
-     SELECT 1 FROM gdd.edges sup
-     WHERE sup.to_node = n.id AND sup.edge_type = 'supersedes' AND sup.superseded_by IS NULL
-   )
+   WHERE n.type NOT IN ('compose', 'expression', 'decision', 'signal', 'test', 'axiom', 'actor', 'projection', 'retro-projection', 'commentary', 'edge-node')
+   AND n.id NOT IN (SELECT e.to_node FROM gdd.edges e WHERE e.edge_type = 'satisfies' AND e.superseded_by IS NULL)
+   AND n.id NOT IN (SELECT e.to_node FROM gdd.edges e WHERE e.edge_type = 'supersedes' AND e.superseded_by IS NULL)
    AND n.build_instructions IS NOT NULL
    ORDER BY n.id;
    ```
