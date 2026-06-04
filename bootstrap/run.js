@@ -69,7 +69,7 @@ async function ensureDatabase(dbName) {
     if (result.rows.length === 0) {
       // CREATE DATABASE can't use parameterized queries; validate the name
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
-        throw new Error(`Invalid database name: ${dbName}`);
+        throw new Error(`Invalid database name: ${dbName}. Names may only contain letters, digits, and underscores, and must start with a letter or underscore.`);
       }
       await adminPool.query(`CREATE DATABASE "${dbName}"`);
       console.log(`Created database ${dbName}.`);
@@ -107,7 +107,7 @@ async function run() {
 
     // Validate schema name
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schemaName)) {
-      throw new Error(`Invalid schema name: ${schemaName}`);
+      throw new Error(`Invalid schema name: ${schemaName}. Names may only contain letters, digits, and underscores, and must start with a letter or underscore.`);
     }
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
     console.log(`Schema ${schemaName} ready.`);

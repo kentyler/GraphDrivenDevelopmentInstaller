@@ -65,7 +65,7 @@ If the database doesn't exist yet:
 3. Set up PostgreSQL (the bootstrap will create the database for you)
 4. Run the bootstrap: `cd bootstrap && npm install && GDD_DB_PASSWORD=yourpassword node run.js`
    - You will be prompted for database name, schema name, and build folder (defaults: `gdd`, `gdd`, `../GDD`)
-   - For non-interactive/CI use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`
+   - For non-interactive/CI use, set env vars: `GDD_DB_NAME`, `GDD_SCHEMA_NAME`, `GDD_BUILD_DIR`. Names may only contain letters, digits, and underscores (e.g. `my_project`, not `my-project`)
    - This creates the database, schema, enums, tables, root intent, populates all intents with `build_instructions`, creates the `gdd-system` graph, and creates the build folder
 5. **Bootstrap phase (raw SQL)**: The server and MCP endpoint don't exist yet — they are among the intents you're about to build. Query the graph directly to find your first workable intents:
    ```sql
@@ -73,8 +73,14 @@ If the database doesn't exist yet:
    FROM gdd.nodes n
    JOIN gdd.graph_memberships gm ON gm.node_id = n.id AND gm.graph_id = 'gdd-system'
    WHERE n.type NOT IN ('expression', 'decision', 'signal')
-   AND n.id NOT IN (SELECT e.to_node FROM gdd.edges e WHERE e.type = 'satisfies' AND NOT e.is_superseded)
-   AND NOT n.is_superseded
+   AND n.id NOT IN (
+     SELECT e.to_node FROM gdd.edges e
+     WHERE e.edge_type = 'satisfies' AND e.superseded_by IS NULL
+   )
+   AND NOT EXISTS (
+     SELECT 1 FROM gdd.edges sup
+     WHERE sup.to_node = n.id AND sup.edge_type = 'supersedes' AND sup.superseded_by IS NULL
+   )
    AND n.build_instructions IS NOT NULL
    ORDER BY n.id;
    ```

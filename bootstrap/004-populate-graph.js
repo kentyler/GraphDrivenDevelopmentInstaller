@@ -220,7 +220,8 @@ const edges = [
 
   // Phase 2: Board participation table
   { from: 'foundation-tables', to: 'table-node-board-memberships', type: 'contains' },
-  { from: 'table-node-board-memberships', to: 'table-boards', type: 'blocked-by' },
+  // NOTE: table-node-board-memberships -> table-boards blocked-by edge moved to 009-populate-edge-boards.js
+  // because table-boards is defined there, not here
 
   // Phase 3: Readability operations
   { from: 'op-record-readability-gap', to: 'op-create-gap', type: 'blocked-by' },
@@ -267,7 +268,6 @@ async function populate() {
       `), [node.id, node.type, node.name, node.description, node.test_condition ? q(node.test_condition) : null, node.test_verification ? q(node.test_verification) : null, node.build_instructions ? q(node.build_instructions) : null]);
       inserted++;
     }
-    console.log(`Inserted/updated ${inserted} nodes.`);
 
     // Insert all edges
     let edgesInserted = 0;
@@ -285,7 +285,7 @@ async function populate() {
         edgesInserted++;
       }
     }
-    console.log(`Inserted ${edgesInserted} edges.`);
+    console.log(`Inserted/updated ${inserted} nodes, ${edgesInserted} edges.`);
 
     // Record bootstrap expression satisfying DDL/enum intents that the SQL files already created
     const bootstrapCompleted = [

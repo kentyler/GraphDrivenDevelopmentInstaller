@@ -122,6 +122,8 @@ GDD_SCHEMA_NAME
 GDD_BUILD_DIR
 ```
 
+Database and schema names may only contain letters, digits, and underscores, and must start with a letter or underscore (e.g. `my_project`, not `my-project`).
+
 The bootstrap creates the database, schema, enums, tables, root intent, current self-hosting intents, the `gdd-system` graph, and the build folder.
 
 ## Important distinction

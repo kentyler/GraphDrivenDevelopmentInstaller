@@ -37,6 +37,9 @@ const edges = [
   { from: 'type-board-impact', to: 'foundation-tables', type: 'blocked-by' },
   { from: 'type-tension-character', to: 'foundation-tables', type: 'blocked-by' },
 
+  // Cross-file edge (moved from 004-populate-graph.js since table-boards is defined here)
+  { from: 'table-node-board-memberships', to: 'table-boards', type: 'blocked-by' },
+
   // Operations blocked by tables/ops
   { from: 'op-create-board', to: 'table-boards', type: 'blocked-by' },
   { from: 'op-assign-node-to-board', to: 'table-node-board-memberships', type: 'blocked-by' },
